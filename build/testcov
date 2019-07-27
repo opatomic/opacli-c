@@ -1,0 +1,33 @@
+#!/bin/sh
+
+
+DEPSDIR="../deps"
+TMPDIR="tmp"
+
+. "$DEPSDIR/opac-c/build/opabuildutil.sh"
+
+GCCOPTS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0"
+
+ensuredir "$TMPDIR"
+rm -rf "${TMPDIR:?}/"*
+
+cp "$DEPSDIR/opac-c/src/"* "$TMPDIR"
+cp "$DEPSDIR/libtommath/"*.c "$TMPDIR"
+cp "$DEPSDIR/libtommath/"*.h "$TMPDIR"
+cp "../src/"* "$TMPDIR"
+
+ORIGDIR=$(pwd)
+cd "$TMPDIR" || exit 1
+INCS="-I./"
+builddir "./" "./"
+FLIST="$(ls ./*.o | sort)"
+$CC $GCCOPTS $LDFLAGS -o "opacli" $FLIST
+
+./opacli < ../../test/cmds.txt
+gcov base64.o
+gcov opabigdec.o
+gcov opac.o
+gcov oparb.o
+gcov opaso.o
+
+cd "$ORIGDIR" || exit 1
