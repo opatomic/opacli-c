@@ -96,6 +96,7 @@ buildcfile "../deps/opac-c/build/wrapmemcpy.c" "$TMPDIR"
 echo "linking opacli..."
 cd "$TMPDIR" || exit 1
 FLIST="$(ls ./*.o | sort)"
+$CC $GCCOPTS $LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS
 strip $STRIPALLFLAG -o "$OUTDIR/opacli" "$OUTDIR/opacli-debug"
 
 rm -rf "${TMPDIR:?}/"*
