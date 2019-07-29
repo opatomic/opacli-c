@@ -40,12 +40,15 @@
 
 #include "opabuff.h"
 #include "opac.h"
-#include "opacliversion.h"
 #include "opacore.h"
 #include "oparb.h"
 #include "opaso.h"
 #include "opasock.h"
 
+
+#ifndef OPACLI_VERSION
+#define OPACLI_VERSION "0.0.0-dev"
+#endif
 
 #define STR_ERROR "ERROR: "
 #define DEFAULT_HOST "localhost"

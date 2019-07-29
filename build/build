@@ -88,6 +88,7 @@ INCS="-I./ -I../deps/libtommath"
 builddir "../deps/opac-c/src" "$TMPDIR"
 
 INCS="-I../deps/opac-c/src -I../deps/linenoise"
+DEFS="$DEFS -DOPACLI_VERSION=\"$(./verget)\""
 builddir "$SRCDIR" "$TMPDIR"
 
 CFLAGS="$CFLAGS $(testgccopt -fno-lto)"
