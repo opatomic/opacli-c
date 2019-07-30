@@ -26,6 +26,10 @@
 #ifdef _WIN32
 #define OPASOCKLOGERR() LOGWINERRCODE(WSAGetLastError())
 #else
+#ifdef __APPLE__
+// TODO: since apple doesn't have MSG_NOSIGNAL, should use signal(SIGPIPE, SIG_IGN) instead?
+#define MSG_NOSIGNAL 0
+#endif
 #define OPASOCKLOGERR() LOGSYSERRNO()
 #define closesocket close
 #endif
