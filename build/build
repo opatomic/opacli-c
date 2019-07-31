@@ -9,6 +9,9 @@
 #   AR             program/command to archive (default ar)
 #   ARFLAGS        flags to pass to AR program (default rcs)
 
+# requirement to build on ubuntu:
+#   sudo apt-get install build-essential
+
 # to build for win64 on ubuntu:
 #   sudo apt-get install mingw-w64
 #   CC=x86_64-w64-mingw32-gcc AR="x86_64-w64-mingw32-ar" TGTOS=win64 ./build
@@ -22,7 +25,7 @@
 #   sudo apt-get install gcc-multilib
 #   CFLAGS="-march=i386 -m32" LDFLAGS="-march=i386 -m32" ./build
 # to build for older systems/glibc:
-#   CFLAGS="-flto" LDFLAGS="-flto -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
+#   LDFLAGS="-Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 # to disable __stack_chk_fail (depends on glibc 2.4):
 #   CFLAGS="-fno-stack-protector" ./build
 # to disable all __*printf_chk (depends on glibc 2.3.4):
@@ -85,6 +88,8 @@ if [ "$TGTOS" = "win32" ] || [ "$TGTOS" = "win64" ]; then
 fi
 
 INCS="-I./ -I../deps/libtommath"
+OPACVER=$(cat ../deps/opac-c/build/version.txt) || exit 1
+DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
 builddir "../deps/opac-c/src" "$TMPDIR"
 
 INCS="-I../deps/opac-c/src -I../deps/linenoise"
