@@ -3,6 +3,12 @@
  * Open sourced with ISC license. Refer to LICENSE for details.
  */
 
+#ifndef _WIN32
+// usleep
+#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
@@ -76,6 +82,9 @@ static void printUsage(const char* bin, int exitCode) {
 			" -h <hostname>   server hostname (default " DEFAULT_HOST ")\n"
 			" -p <port>       server port (default 4567)\n"
 			" -a <password>   password for AUTH\n"
+			" -r <repeat>     run specified command <repeat> times\n"
+			" -i <interval>   when -r is used, wait <interval> seconds per command;\n"
+			"                 can use decimal format: -i 0.01\n"
 			" -x              read last argument from STDIN\n"
 			" --indent <str>  indent when printing multiline response (default 4 spaces)\n"
 			" --authp         prompt for AUTH password\n"
@@ -86,6 +95,26 @@ static void printUsage(const char* bin, int exitCode) {
 }
 
 #ifdef _WIN32
+
+static void usleep(unsigned long usec) {
+	LARGE_INTEGER li;
+	// SetWaitableTimer: negative value indicates relative time; positive value indicate absolute time
+	//  value is in 100-nanosecond intervals
+	li.QuadPart = 0LL - ((long long)usec * 10);
+	HANDLE ht = CreateWaitableTimer(NULL, TRUE, NULL);
+	if (ht != NULL) {
+		if (SetWaitableTimer(ht, &li, 0, NULL, NULL, FALSE)) {
+			WaitForSingleObject(ht, INFINITE);
+		} else {
+			LOGWINERR();
+		}
+		if (!CloseHandle(ht)) {
+			LOGWINERR();
+		}
+	} else {
+		LOGWINERR();
+	}
+}
 
 static int opacliWideToUtf8(const wchar_t* wsrc, char** pUtf8Str) {
 	int reqLen = WideCharToMultiByte(CP_UTF8, 0, wsrc, -1, NULL, 0, NULL, NULL);
@@ -488,6 +517,8 @@ int main(int argc, const char* argv[]) {
 	char authPrompt = 0;
 	int istty = isatty(STDIN_FILENO);
 	char useLinenoise = USELINENOISE && istty;
+	long interval = 0;
+	long long repeat = 1;
 
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
@@ -496,6 +527,10 @@ int main(int argc, const char* argv[]) {
 			port = (uint16_t) argtouir(argv[++i], 1, UINT16_MAX, "-p");
 		} else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
 			authPass = argv[++i];
+		} else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
+			repeat = strtoll(argv[++i], NULL, 0);
+		} else if (strcmp(argv[i], "-i") == 0 && i + 1 < argc) {
+			interval = atof(argv[++i]) * 1000000;
 		} else if (strcmp(argv[i], "-x") == 0) {
 			readArgFromStdin = 1;
 		} else if (strcmp(argv[i], "--authp") == 0) {
@@ -536,38 +571,40 @@ int main(int argc, const char* argv[]) {
 	}
 	opabuff lineb = {0};
 	char* line = NULL;
+	int err = 0;
+
+	if (usercmdIdx > 0) {
+		for (int i = usercmdIdx; !err && i < argc; ++i) {
+			err = opabuffAppend(&lineb, argv[i], strlen(argv[i]));
+			if (!err) {
+				err = opabuffAppend1(&lineb, ' ');
+			}
+		}
+		if (!err && readArgFromStdin && !istty) {
+			err = opabuffAppend(&lineb, " ", 1);
+			uint8_t buff[512];
+			while (!err && !feof(src)) {
+				if (ferror(src)) {
+					LOGSYSERRNO();
+					exit(EXIT_FAILURE);
+				}
+				size_t numRead = fread(buff, 1, sizeof(buff), src);
+				if (numRead > 0) {
+					err = opabuffAppend(&lineb, buff, numRead);
+				}
+			}
+		}
+		if (!err) {
+			err = opabuffAppend1(&lineb, '\0');
+		}
+		if (!err) {
+			line = (char*) opabuffGetPos(&lineb, 0);
+		}
+	}
 
 	while (1) {
-		int err = 0;
-
 		if (usercmdIdx > 0) {
-			for (int i = usercmdIdx; !err && i < argc; ++i) {
-				err = opabuffAppend(&lineb, argv[i], strlen(argv[i]));
-				if (!err) {
-					err = opabuffAppend1(&lineb, ' ');
-				}
-			}
-			if (!err && readArgFromStdin && !istty) {
-				err = opabuffAppend(&lineb, " ", 1);
-
-				uint8_t buff[1];
-				while (!err && !feof(src)) {
-					if (ferror(src)) {
-						LOGSYSERRNO();
-						exit(EXIT_FAILURE);
-					}
-					size_t numRead = fread(buff, 1, 1, src);
-					if (numRead > 0) {
-						err = opabuffAppend(&lineb, buff, 1);
-					}
-				}
-			}
-			if (!err) {
-				err = opabuffAppend1(&lineb, '\0');
-			}
-			if (!err) {
-				line = (char*) opabuffGetPos(&lineb, 0);
-			}
+			// non-interactive; line already parsed
 		} else if (useLinenoise) {
 			linenoiseFree(line);
 			line = linenoise(">");
@@ -578,7 +615,9 @@ int main(int argc, const char* argv[]) {
 			if (istty) {
 				printf(">");
 			}
-			err = opaGetLine(src, &lineb);
+			if (!err) {
+				err = opaGetLine(src, &lineb);
+			}
 			if (!err) {
 				if (opabuffGetLen(&lineb) == 0) {
 					break;
@@ -632,7 +671,12 @@ int main(int argc, const char* argv[]) {
 		opacReqFreeResponse(&req);
 
 		if (usercmdIdx > 0) {
-			break;
+			if (repeat > 0 && --repeat == 0) {
+				break;
+			}
+			if (interval > 0) {
+				usleep(interval);
+			}
 		}
 		if (useLinenoise) {
 			linenoiseHistoryAdd(line);
