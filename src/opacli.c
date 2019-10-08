@@ -248,6 +248,9 @@ static size_t opacliWriteCB(opac* c, const void* buff, size_t len) {
 static void opacliClientErrCB(opac* c, int errCode) {
 	UNUSED(c);
 	UNUSED(errCode);
+	if (errCode == OPA_ERR_PARSE) {
+		OPALOGERR("error parsing response from server");
+	}
 	int err = opasockClose(CURRCONN);
 	if (err) {
 		OPALOGERRF("err %d trying to close conn", err);
@@ -505,7 +508,6 @@ int main(int argc, const char* argv[]) {
 	//  detect socket close when it happens rather than when sending next request
 	//  strict parsing mode (must quote strings)? json input/output mode?
 	//  allow strings to be single quoted?
-	//  option to prompt for auth password and mask typed chars as ***
 
 	const char* binName = argc > 0 ? argv[0] : "";
 	const char* host = DEFAULT_HOST;
@@ -670,6 +672,10 @@ int main(int argc, const char* argv[]) {
 		OPAFREE(resultStr);
 		opacReqFreeResponse(&req);
 
+		if (!opacIsOpen(&c)) {
+			break;
+		}
+
 		if (usercmdIdx > 0) {
 			if (repeat > 0 && --repeat == 0) {
 				break;
@@ -689,7 +695,10 @@ int main(int argc, const char* argv[]) {
 
 	opabuffFree(&lineb);
 
-	// TODO: close conn?
+	if (CURRCONN != SOCKID_NONE) {
+		opasockClose(CURRCONN);
+	}
+	opacClose(&c);
 
 #if defined(OPADBG) && defined(OPAMALLOC)
 	const opamallocStats* mstats = opamallocGetStats();
