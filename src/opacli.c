@@ -301,7 +301,7 @@ static int opacliReadPass(int mask, opabuff* b) {
 			break;
 		}
 		if (ch != 0x7f && ch != 0x08) {
-			if (mask){
+			if (mask) {
 				fputc(mask, stdout);
 			}
 			err = opabuffAppend1(b, ch);
