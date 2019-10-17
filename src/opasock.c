@@ -63,7 +63,7 @@ static sockid opasockConnectInternal(const char* remoteAddr, uint16_t remotePort
 	for (struct addrinfo* i = allInfo; i != NULL; i = i->ai_next) {
 		if ((s = socket(i->ai_family, i->ai_socktype, i->ai_protocol)) != SOCKID_NONE) {
 			if (connect(s, i->ai_addr, i->ai_addrlen) != 0) {
-				OPASOCKLOGERR();
+				//OPASOCKLOGERR();
 				opasockClose(s);
 				s = SOCKID_NONE;
 				continue;
