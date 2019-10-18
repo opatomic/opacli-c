@@ -81,7 +81,7 @@ static sockid opasockConnectInternal(const char* remoteAddr, uint16_t remotePort
 }
 
 sockid opasockConnect(const char* remoteAddr, uint16_t remotePort) {
-	return opasockConnectInternal(remoteAddr, remotePort, AF_UNSPEC, SOCK_STREAM, AI_PASSIVE);
+	return opasockConnectInternal(remoteAddr, remotePort, AF_UNSPEC, SOCK_STREAM, 0);
 }
 
 int opasockRecv(sockid s, void* buff, size_t len, size_t* pNumRead) {
