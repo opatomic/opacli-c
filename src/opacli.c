@@ -387,7 +387,7 @@ static int opacSecureAuth(opac* c, const char* pass) {
 
 	size_t passLen = strlen(pass);
 	size_t passSerLen = passLen == 0 ? 1 : 1 + opaviStoreLen(passLen) + passLen;
-	size_t lenReq = 1 + (1 + opaviStoreLen(AUTHLEN) + AUTHLEN) + (1 + passSerLen + 1) + 1;
+	size_t lenReq = 1 + 1 + (1 + opaviStoreLen(AUTHLEN) + AUTHLEN) + (passSerLen) + 1;
 
 	opabuff buff;
 	opabuffInit(&buff, OPABUFF_F_NOPAGING | OPABUFF_F_ZERO);
@@ -399,11 +399,11 @@ static int opacSecureAuth(opac* c, const char* pass) {
 
 	uint8_t* pos = opabuffGetPos(&buff, 0);
 	*pos++ = OPADEF_ARRAY_START;
+	*pos++ = OPADEF_NULL;
 	*pos++ = OPADEF_STR_LPVI;
 	pos = opaviStore(AUTHLEN, pos);
 	memcpy(pos, AUTHCMD, AUTHLEN);
 	pos += AUTHLEN;
-	*pos++ = OPADEF_ARRAY_START;
 	if (passLen != 0) {
 		*pos++ = OPADEF_STR_LPVI;
 		pos = opaviStore(passLen, pos);
@@ -412,7 +412,6 @@ static int opacSecureAuth(opac* c, const char* pass) {
 	} else {
 		*pos++ = OPADEF_STR_EMPTY;
 	}
-	*pos++ = OPADEF_ARRAY_END;
 	*pos++ = OPADEF_ARRAY_END;
 	OASSERT(pos == opabuffGetPos(&buff, 0) + lenReq);
 
