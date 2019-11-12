@@ -147,7 +147,8 @@ int opabigdecGet64(const opabigdec* a, uint64_t* pVal) {
 			int tomerr = mp_div_d(&tmp.significand, 10, &tmp.significand, &rem);
 			if (tomerr || rem) {
 				opabigdecClear(&tmp);
-				return tomerr ? opabigdecConvertErr(tomerr) : OPA_ERR_INVARG;
+				// TODO: OPA_ERR_OVERFLOW is a bad error code name to indicate remainder?
+				return tomerr ? opabigdecConvertErr(tomerr) : OPA_ERR_OVERFLOW;
 			}
 			++tmp.exponent;
 		}
@@ -748,6 +749,10 @@ int opabigdecToString(const opabigdec* a, char* str, int radix, size_t space) {
 	if (!err && a->exponent != 0) {
 		// skip past the chars that were already written
 		size_t slen = strlen(str);
+		if (slen > 0 && str[0] == '-') {
+			++str;
+			--slen;
+		}
 		OASSERT(slen > 0 && space > slen);
 
 		if (a->exponent > 0) {
@@ -806,4 +811,3 @@ int opabigdecToString(const opabigdec* a, char* str, int radix, size_t space) {
 
 	return err;
 }
-
