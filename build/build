@@ -14,10 +14,10 @@
 
 # to build for win64 on ubuntu:
 #   sudo apt-get install mingw-w64
-#   CC=x86_64-w64-mingw32-gcc AR="x86_64-w64-mingw32-ar" TGTOS=win64 ./build
+#   CC=x86_64-w64-mingw32-gcc AR="x86_64-w64-mingw32-ar" TGTOS=win ./build
 # to build for win32 on ubuntu:
 #   sudo apt-get install mingw-w64
-#   CC=i686-w64-mingw32-gcc AR="i686-w64-mingw32-ar" TGTOS=win32 ./build
+#   CC=i686-w64-mingw32-gcc AR="i686-w64-mingw32-ar" TGTOS=win ./build
 # to use GMP rather than libtommath:
 #   sudo apt-get install libgmp3-dev
 #   OPA_USEGMP=1 ./build
@@ -40,7 +40,7 @@ OUTDIR="$PWD/out"
 
 . "../deps/opac-c/build/opabuildutil.sh"
 
-#if [[ ! ($TGTOS == "linux" || $TGTOS == "win64" || $TGTOS == "win32" || $TGTOS == "darwin" ) ]]; then
+#if [[ ! ($TGTOS == "linux" || $TGTOS == "win" || $TGTOS == "darwin" ) ]]; then
 #	echo "$TGTOS not supported; must set \$TGTOS properly"
 #	exit 1
 #fi
@@ -53,15 +53,21 @@ ensuredir "$OUTDIR"
 ensuredir "$TMPDIR"
 rm -rf "${TMPDIR:?}/"*
 
+
+if [ "$OS" = "Windows_NT" ]; then
+	# when compiling with mingw, lots of duplicated strings are added to binary. disable this
+	CFLAGS="$(testgccopt -fno-ident) $CFLAGS"
+fi
+
 if [ "$OPA_USEGMP" != "1" ]; then
-	INCS="-I./"
+	INCS="-I."
 	builddir "../deps/libtommath" "$TMPDIR"
 	$AR $ARFLAGS "$TMPDIR/libtommath.a" "$TMPDIR"/*.o
 	rm -rf "${TMPDIR:?}/"*.o
 fi
 
 
-if [ "$TGTOS" != "win32" ] && [ "$TGTOS" != "win64" ]; then
+if [ "$TGTOS" != "win" ]; then
 	# compiling linenoise requires a feature test macro enabled and some warnings disabled
 	# defining _GNU_SOURCE rather than _BSD_SOURCE to avoid dependency on __isoc99_sscanf (glibc 2.7)
 	ORIGCF="$CFLAGS"
@@ -82,7 +88,7 @@ else
 	LNLIBS="$LNLIBS libtommath.a"
 fi
 
-if [ "$TGTOS" = "win32" ] || [ "$TGTOS" = "win64" ]; then
+if [ "$TGTOS" = "win" ]; then
 	DEFS="$DEFS -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0501 -D__USE_MINGW_ANSI_STDIO"
 	LNLIBS="$LNLIBS -lws2_32"
 fi
@@ -103,6 +109,11 @@ echo "linking opacli..."
 cd "$TMPDIR" || exit 1
 FLIST="$(ls ./*.o | sort)"
 $CC $GCCOPTS $LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS
-strip $STRIPALLFLAG -o "$OUTDIR/opacli" "$OUTDIR/opacli-debug"
+if [ "$OS" = "Windows_NT" ]; then
+	# running mingw on windows: appends .exe to output filename
+	strip $STRIPALLFLAG -o "$OUTDIR/opacli.exe" "$OUTDIR/opacli-debug.exe"
+else
+	strip $STRIPALLFLAG -o "$OUTDIR/opacli" "$OUTDIR/opacli-debug"
+fi
 
 rm -rf "${TMPDIR:?}/"*
