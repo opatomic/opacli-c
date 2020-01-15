@@ -17,6 +17,8 @@
 #include <string.h>
 
 #ifdef _WIN32
+// note: include winsock2.h here to make sure it is included before windows.h
+#include <winsock2.h>
 #include <fcntl.h>
 #include <io.h>
 #define strcasecmp _stricmp
