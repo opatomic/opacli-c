@@ -49,7 +49,7 @@ static sockid opasockConnectInternal(const char* remoteAddr, uint16_t remotePort
 	struct addrinfo hints = {.ai_flags = aiFlags, .ai_family = aiFamily, .ai_socktype = aiSockType, 0};
 	struct addrinfo* allInfo = NULL;
 
-	u32toa(remotePort, portStr, 10);
+	snprintf(portStr, sizeof(portStr), "%d", remotePort);
 	int err = getaddrinfo(remoteAddr, portStr, &hints, &allInfo);
 	if (err) {
 		#ifdef _WIN32
