@@ -75,6 +75,8 @@ rmdir /S /Q %TMPDIR%\libtommath
 
 set /p OPACVER=<..\deps\opac-c\build\version.txt
 set /p OPACLIVER=<version.txt
+:: TODO: if git is installed, and this directory is a proper git repo, determine whether the source
+::   is modified and if not then assign a proper version string (without -win or -dev appended)
 set OPACLIVER=%OPACLIVER%-win-dev
 :: note: if compiling with threads support: add -D_AMD64_ to allow including synchapi.h rather than windows.h in opamutex.h
 set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0501 -DOPA_NOTHREADS -DOPAC_VERSION=\"%OPACVER%\" -DOPACLI_VERSION=\"%OPACLIVER%\"
