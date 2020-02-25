@@ -616,7 +616,7 @@ int main(int argc, const char* argv[]) {
 			}
 		} else {
 			if (istty) {
-				printf(">");
+				printf("> ");
 			}
 			if (!err) {
 				err = opaGetLine(src, &lineb);
