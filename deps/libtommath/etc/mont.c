@@ -1,5 +1,6 @@
 /* tests the montgomery routines */
 #include <tommath.h>
+#include <stdlib.h>
 #include <time.h>
 
 int main(void)
@@ -41,7 +42,3 @@ int main(void)
 
    return 0;
 }
-
-/* ref:         HEAD -> master, tag: v1.1.0 */
-/* git commit:  08549ad6bc8b0cede0b357a9c341c5c6473a9c55 */
-/* commit time: 2019-01-28 20:32:32 +0100 */
