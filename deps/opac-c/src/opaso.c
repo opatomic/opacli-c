@@ -143,13 +143,13 @@ static int opasoEscapeString(const uint8_t* src, size_t len, opabuff* b) {
 static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigned int depth, opabuff* b) {
 	// TODO: add option to output JSON (ie, escape undefined/sortmax as something like ~U ~SM)
 	switch (*src) {
-		case OPADEF_UNDEFINED:  return opabuffAppendStr(b, "undefined");
-		case OPADEF_NULL:       return opabuffAppendStr(b, "null");
-		case OPADEF_FALSE:      return opabuffAppendStr(b, "false");
-		case OPADEF_TRUE:       return opabuffAppendStr(b, "true");
-		case OPADEF_SORTMAX:    return opabuffAppendStr(b, "SORTMAX");
-		case OPADEF_BIN_EMPTY:  return opabuffAppendStr(b, "\"~base64\"");
-		case OPADEF_STR_EMPTY:  return opabuffAppendStr(b, "\"\"");
+		case OPADEF_UNDEFINED:   return opabuffAppendStr(b, "undefined");
+		case OPADEF_NULL:        return opabuffAppendStr(b, "null");
+		case OPADEF_FALSE:       return opabuffAppendStr(b, "false");
+		case OPADEF_TRUE:        return opabuffAppendStr(b, "true");
+		case OPADEF_SORTMAX:     return opabuffAppendStr(b, "SORTMAX");
+		case OPADEF_BIN_EMPTY:   return opabuffAppendStr(b, "\"~base64\"");
+		case OPADEF_STR_EMPTY:   return opabuffAppendStr(b, "\"\"");
 		case OPADEF_ARRAY_EMPTY: return opabuffAppendStr(b, "[]");
 
 		case OPADEF_ARRAY_START: {
@@ -223,6 +223,7 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 		}
 
 		case OPADEF_ZERO:
+			return opabuffAppend1(b, '0');
 		case OPADEF_NEGVARINT:
 		case OPADEF_POSVARINT:
 		case OPADEF_NEGBIGINT:
@@ -245,9 +246,11 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 					err = opabuffSetLen(b, origLen + maxlen + 1);
 					if (!err) {
 						char* strpos = (char*) opabuffGetPos(b, origLen);
-						err = opabigdecToString(&bd, strpos, 10, maxlen);
+						size_t lenWithNull;
+						err = opabigdecToString(&bd, strpos, maxlen, &lenWithNull, 10);
 						if (!err) {
-							err = opabuffSetLen(b, origLen + strlen(strpos));
+							OASSERT(lenWithNull > 0);
+							err = opabuffSetLen(b, origLen + lenWithNull - 1);
 						}
 					}
 				}
