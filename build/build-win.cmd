@@ -87,7 +87,7 @@ set INCS=%INCS% "-I..\deps\opac-c\src"
 call :BuildDir ..\src\*.c %TMPDIR%
 
 call :GetFLIST %TMPDIR%\*.obj
-cl -nologo /MD "-Fe%OUTDIR%\opacli.exe" %FLIST% "%TMPDIR%\tommath.lib" ws2_32.lib
+cl -nologo /MD "-Fe%OUTDIR%\opacli.exe" %FLIST% "%TMPDIR%\tommath.lib" ws2_32.lib advapi32.lib
 
 ::set LNOPTS=/MANIFEST:NO /OPT:REF /OPT:NOICF /DEBUG /nodefaultlib:libcmt.lib
 ::link -nologo %LNOPTS% "/out:%OUTDIR%\opacli.exe" %FLIST% "%LIBTOMDIR%\tommath.lib" ws2_32.lib msvcrt.lib kernel32.lib
