@@ -52,6 +52,7 @@
 #include "oparb.h"
 #include "opaso.h"
 #include "opasock.h"
+#include "licenses.h"
 
 
 #ifndef OPACLI_VERSION
@@ -92,6 +93,7 @@ static void printUsage(const char* bin, int exitCode) {
 			" --authp         prompt for AUTH password\n"
 			" --help          print this help and exit\n"
 			" --version       print version and exit\n"
+			" --licenses      print the licenses of included software\n"
 			, bin);
 	exit(exitCode);
 }
@@ -547,6 +549,16 @@ int main(int argc, const char* argv[]) {
 		} else if (strcmp(argv[i], "--version") == 0) {
 			const opacBuildInfo* ocbi = opacGetBuildInfo();
 			printf("opacli %s (opac %s; %s; %s)\n", OPACLI_VERSION, ocbi->version, ocbi->threadSupport ? "threads" : "no-threads", ocbi->bigIntLib);
+			exit(EXIT_SUCCESS);
+		} else if (strcmp(argv[i], "--licenses") == 0) {
+			const char* licenses[] = {opatomicLicense, libtomLicense, linenoiseLicense, libdlbLicense};
+			printf("Depending on how it is configured, this project may include source code from any of the following:\n\n");
+			for (size_t j = 0; j < sizeof(licenses) / sizeof(licenses[0]); ++j) {
+				if (j != 0) {
+					printf("-------------------------------------------------------------------------\n");
+				}
+				printf("%s\n", licenses[j]);
+			}
 			exit(EXIT_SUCCESS);
 		} else {
 			if (argv[i][0] != '-') {
