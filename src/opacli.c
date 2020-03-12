@@ -516,6 +516,7 @@ int main(int argc, const char* argv[]) {
 	const char* host = DEFAULT_HOST;
 	const char* authPass = NULL;
 	const char* indent = "    ";
+	const char* prompt = "> ";
 	int usercmdIdx = 0;
 	uint16_t port = 4567;
 	char readArgFromStdin = 0;
@@ -622,13 +623,13 @@ int main(int argc, const char* argv[]) {
 			// non-interactive; line already parsed
 		} else if (useLinenoise) {
 			linenoiseFree(line);
-			line = linenoise(">");
+			line = linenoise(prompt);
 			if (line == NULL) {
 				break;
 			}
 		} else {
 			if (istty) {
-				printf("> ");
+				printf("%s", prompt);
 			}
 			if (!err) {
 				err = opaGetLine(src, &lineb);
