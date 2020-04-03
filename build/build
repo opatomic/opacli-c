@@ -14,10 +14,10 @@
 
 # to build for win64 on ubuntu:
 #   sudo apt-get install mingw-w64
-#   CC=x86_64-w64-mingw32-gcc AR="x86_64-w64-mingw32-ar" TGTOS=win ./build
+#   CC=x86_64-w64-mingw32-gcc AR=x86_64-w64-mingw32-ar TGTOS=win ./build
 # to build for win32 on ubuntu:
 #   sudo apt-get install mingw-w64
-#   CC=i686-w64-mingw32-gcc AR="i686-w64-mingw32-ar" TGTOS=win ./build
+#   CC=i686-w64-mingw32-gcc AR=i686-w64-mingw32-ar TGTOS=win ./build
 # to use GMP rather than libtommath:
 #   sudo apt-get install libgmp3-dev
 #   OPA_USEGMP=1 ./build
