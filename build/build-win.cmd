@@ -79,7 +79,7 @@ set /p OPACLIVER=<version.txt
 ::   is modified and if not then assign a proper version string (without -win or -dev appended)
 set OPACLIVER=%OPACLIVER%-win-dev
 :: note: if compiling with threads support: add -D_AMD64_ to allow including synchapi.h rather than windows.h in opamutex.h
-set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0501 -DOPA_NOTHREADS -DOPAC_VERSION=\"%OPACVER%\" -DOPACLI_VERSION=\"%OPACLIVER%\"
+set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0500 -DWINVER=0x0500 -DOPA_NOTHREADS -DOPAC_VERSION=\"%OPACVER%\" -DOPACLI_VERSION=\"%OPACLIVER%\"
 set INCS="-I%LIBTOMDIR%"
 
 call :BuildDir ..\deps\opac-c\src\*.c %TMPDIR%
