@@ -10,12 +10,13 @@
 #include <string.h>
 
 #ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
 // by including wspiapi.h, getaddrinfo() and related functions will be supported on win2k even though they
 //  are not available in the OS
 //  TODO: add a reference link for this
+// note: wspiapi.h needs to be included after ws2tcpip.h
 #include <wspiapi.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #else
 #include <errno.h>
 #include <fcntl.h>
