@@ -40,16 +40,17 @@
 #endif
 
 
-int opasockClose(sockid s) {
-	if (closesocket(s)) {
+int opasockClose(opasock* s) {
+	if (s->sid != SOCKID_NONE && closesocket(s->sid)) {
 		OPASOCKLOGERR();
 		return OPA_ERR_INTERNAL;
 	}
+	s->sid = SOCKID_NONE;
 	return 0;
 }
 
-static sockid opasockConnectInternal(const char* remoteAddr, uint16_t remotePort, int aiFamily, int aiSockType, int aiFlags) {
-	sockid s = SOCKID_NONE;
+static void opasockConnectInternal(opasock* s, const char* remoteAddr, uint16_t remotePort, int aiFamily, int aiSockType, int aiFlags) {
+	s->sid = SOCKID_NONE;
 	char portStr[8];
 	struct addrinfo hints = {.ai_flags = aiFlags, .ai_family = aiFamily, .ai_socktype = aiSockType, 0};
 	struct addrinfo* allInfo = NULL;
@@ -66,11 +67,10 @@ static sockid opasockConnectInternal(const char* remoteAddr, uint16_t remotePort
 	}
 
 	for (struct addrinfo* i = allInfo; i != NULL; i = i->ai_next) {
-		if ((s = socket(i->ai_family, i->ai_socktype, i->ai_protocol)) != SOCKID_NONE) {
-			if (connect(s, i->ai_addr, i->ai_addrlen) != 0) {
+		if ((s->sid = socket(i->ai_family, i->ai_socktype, i->ai_protocol)) != SOCKID_NONE) {
+			if (connect(s->sid, i->ai_addr, i->ai_addrlen) != 0) {
 				//OPASOCKLOGERR();
 				opasockClose(s);
-				s = SOCKID_NONE;
 				continue;
 			}
 			break;
@@ -78,22 +78,20 @@ static sockid opasockConnectInternal(const char* remoteAddr, uint16_t remotePort
 	}
 	freeaddrinfo(allInfo);
 
-	if (s == SOCKID_NONE) {
+	if (s->sid == SOCKID_NONE) {
 		OPALOGERRF("could not bind address; addr=%s port=%u", remoteAddr, remotePort);
 	}
-
-	return s;
 }
 
-sockid opasockConnect(const char* remoteAddr, uint16_t remotePort) {
-	return opasockConnectInternal(remoteAddr, remotePort, AF_UNSPEC, SOCK_STREAM, 0);
+void opasockConnect(opasock* s, const char* remoteAddr, uint16_t remotePort) {
+	opasockConnectInternal(s, remoteAddr, remotePort, AF_UNSPEC, SOCK_STREAM, 0);
 }
 
-int opasockRecv(sockid s, void* buff, size_t len, size_t* pNumRead) {
+int opasockRecv(opasock* s, void* buff, size_t len, size_t* pNumRead) {
 #ifdef _WIN32
-	int result = recv(s, buff, len < (size_t) INT_MAX ? (int)len : INT_MAX, 0);
+	int result = recv(s->sid, buff, len < (size_t) INT_MAX ? (int)len : INT_MAX, 0);
 #else
-	ssize_t result = recv(s, buff, len, 0);
+	ssize_t result = recv(s->sid, buff, len, 0);
 #endif
 	if (result < 0) {
 		if (pNumRead != NULL) {
@@ -109,11 +107,11 @@ int opasockRecv(sockid s, void* buff, size_t len, size_t* pNumRead) {
 	return 0;
 }
 
-int opasockSend(sockid s, const void* buff, size_t len, size_t* pNumWritten) {
+int opasockSend(opasock* s, const void* buff, size_t len, size_t* pNumWritten) {
 #ifdef _WIN32
-	int result = send(s, buff, len < (size_t) INT_MAX ? (int)len : INT_MAX, 0);
+	int result = send(s->sid, buff, len < (size_t) INT_MAX ? (int)len : INT_MAX, 0);
 #else
-	ssize_t result = send(s, buff, len, MSG_NOSIGNAL);
+	ssize_t result = send(s->sid, buff, len, MSG_NOSIGNAL);
 #endif
 	if (result < 0) {
 		if (pNumWritten != NULL) {

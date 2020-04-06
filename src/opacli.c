@@ -73,7 +73,7 @@
 #define ERR_AUTHREQ -53
 
 
-sockid CURRCONN = SOCKID_NONE;
+opasock CURRCONN = {SOCKID_NONE};
 
 
 
@@ -211,14 +211,14 @@ static int opaGetLine(FILE* f, opabuff* b) {
 #endif
 
 static void opacliConnect(const char* addr, uint16_t port) {
-	if (CURRCONN != SOCKID_NONE) {
-		int err = opasockClose(CURRCONN);
+	if (CURRCONN.sid != SOCKID_NONE) {
+		int err = opasockClose(&CURRCONN);
 		if (err) {
 			OPALOGERRF("err %d trying to close conn", err);
 		}
 	}
-	CURRCONN = opasockConnect(addr, port);
-	if (CURRCONN == SOCKID_NONE) {
+	opasockConnect(&CURRCONN, addr, port);
+	if (CURRCONN.sid == SOCKID_NONE) {
 		// TODO: good log message
 		exit(EXIT_FAILURE);
 	}
@@ -227,7 +227,7 @@ static void opacliConnect(const char* addr, uint16_t port) {
 static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 	UNUSED(c);
 	size_t tot;
-	int err = opasockRecv(CURRCONN, buff, len, &tot);
+	int err = opasockRecv(&CURRCONN, buff, len, &tot);
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
 		exit(EXIT_FAILURE);
@@ -243,7 +243,7 @@ static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 static size_t opacliWriteCB(opac* c, const void* buff, size_t len) {
 	UNUSED(c);
 	size_t tot;
-	int err = opasockSend(CURRCONN, buff, len, &tot);
+	int err = opasockSend(&CURRCONN, buff, len, &tot);
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
 		exit(EXIT_FAILURE);
@@ -257,7 +257,7 @@ static void opacliClientErrCB(opac* c, int errCode) {
 	if (errCode == OPA_ERR_PARSE) {
 		OPALOGERR("error parsing response from server");
 	}
-	int err = opasockClose(CURRCONN);
+	int err = opasockClose(&CURRCONN);
 	if (err) {
 		OPALOGERRF("err %d trying to close conn", err);
 	}
@@ -757,9 +757,7 @@ static int mainInternal(int argc, const char* argv[]) {
 
 	opabuffFree(&lineb);
 
-	if (CURRCONN != SOCKID_NONE) {
-		opasockClose(CURRCONN);
-	}
+	opasockClose(&CURRCONN);
 	opacClose(&c);
 
 #if defined(OPADBG) && defined(OPAMALLOC)

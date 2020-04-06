@@ -19,11 +19,15 @@
 	#define SOCKID_NONE -1
 #endif
 
+typedef struct {
+	sockid sid;
+} opasock;
 
-sockid opasockConnect(const char* remoteAddr, uint16_t remotePort);
-int opasockClose(sockid s);
-int opasockRecv(sockid s, void* buff, size_t len, size_t* pNumRead);
-int opasockSend(sockid s, const void* buff, size_t len, size_t* pNumWritten);
+
+void opasockConnect(opasock* s, const char* remoteAddr, uint16_t remotePort);
+int opasockClose(opasock* s);
+int opasockRecv(opasock* s, void* buff, size_t len, size_t* pNumRead);
+int opasockSend(opasock* s, const void* buff, size_t len, size_t* pNumWritten);
 
 
 #endif
