@@ -291,14 +291,14 @@ static int linenoiseHistoryAdd(const char* line) {
 
 
 
-static int opacliReadPass(int mask, opabuff* b) {
+static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	int err = 0;
 	size_t origLen = opabuffGetLen(b);
 
 	mask = mask > 0x1f && mask < 0x7f ? mask : 0;
 
 	while (!err) {
-		int ch = fgetc(stdin);
+		int ch = fgetc(fin);
 		if (ch == EOF) {
 			err = OPA_ERR_INTERNAL;
 			break;
@@ -308,14 +308,14 @@ static int opacliReadPass(int mask, opabuff* b) {
 		}
 		if (ch != 0x7f && ch != 0x08) {
 			if (mask) {
-				fputc(mask, stdout);
+				fputc(mask, fout);
 			}
 			err = opabuffAppend1(b, ch);
 		} else if (opabuffGetLen(b) > 0) {
 			if (mask) {
-				fputc(0x8, stdout);
-				fputc(' ', stdout);
-				fputc(0x8, stdout);
+				fputc(0x8, fout);
+				fputc(' ', fout);
+				fputc(0x8, fout);
 			}
 			opabuffSetLen(b, opabuffGetLen(b) - 1);
 		}
@@ -333,39 +333,42 @@ static int opacliReadPass(int mask, opabuff* b) {
 }
 
 #ifdef _WIN32
-static int opacliGetPassFromTerm(int mask, opabuff* b) {
+static int opacliGetPassFromTerm(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	// TODO: print mask character when user types a character
 	UNUSED(mask);
 	DWORD origMode;
-	HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+	intptr_t inth = _get_osfhandle(_fileno(fin));
+	HANDLE h = (HANDLE) inth;
 	if (!GetConsoleMode(h, &origMode)) {
+		LOGWINERR();
 		return OPA_ERR_INTERNAL;
 	}
 	if (!SetConsoleMode(h, origMode & (~ENABLE_ECHO_INPUT))) {
+		LOGWINERR();
 		return OPA_ERR_INTERNAL;
 	}
-	int err = opacliReadPass(0, b);
+	int err = opacliReadPass(fin, fout, 0, b);
 	if (!SetConsoleMode(h, origMode)) {
-		// TODO: log err if cannot set console back to orig mode?
+		LOGWINERR();
 	}
 	return err;
 }
 #else
-static int opacliGetPassFromTerm(int mask, opabuff* b) {
+static int opacliGetPassFromTerm(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	struct termios origAttr;
 	struct termios hideAttr;
-	if (tcgetattr(STDIN_FILENO, &origAttr)) {
+	if (tcgetattr(fileno(fin), &origAttr)) {
 		return OPA_ERR_INTERNAL;
 	}
 	hideAttr = origAttr;
 	hideAttr.c_lflag &= ~(ICANON | ECHO);
 	hideAttr.c_cc[VTIME] = 0;
 	hideAttr.c_cc[VMIN] = 1;
-	if (tcsetattr(STDIN_FILENO, TCSANOW, &hideAttr)) {
+	if (tcsetattr(fileno(fin), TCSANOW, &hideAttr)) {
 		return OPA_ERR_INTERNAL;
 	}
-	int err = opacliReadPass(mask, b);
-	if (tcsetattr(STDIN_FILENO, TCSANOW, &origAttr)) {
+	int err = opacliReadPass(fin, fout, mask, b);
+	if (tcsetattr(fileno(fin), TCSANOW, &origAttr)) {
 		// TODO: log err if cannot set terminal back to orig mode?
 	}
 	return err;
@@ -456,7 +459,12 @@ static int opacIsAuthNeeded(opac* c) {
 	return authreq;
 }
 
-static void opacliDoAuth(opac* c, const char* pass, int prompt) {
+static void printAndFlush(FILE* f, const char* str) {
+	fputs(str, f);
+	fflush(f);
+}
+
+static void opacliDoAuth2(opac* c, const char* pass, int prompt, FILE* fin, FILE* fout) {
 	if (pass == NULL && !prompt) {
 		return;
 	}
@@ -467,13 +475,13 @@ static void opacliDoAuth(opac* c, const char* pass, int prompt) {
 		if (prompt) {
 			// TODO: print host?
 			opabuffSetLen(&buff, 0);
-			printf("password: ");
-			if (opacliGetPassFromTerm('*', &buff)) {
+			printAndFlush(fout, "password: ");
+			if (opacliGetPassFromTerm(fin, fout, '*', &buff)) {
 				opabuffFree(&buff);
 				fprintf(stderr, "error reading password\n");
 				exit(EXIT_FAILURE);
 			}
-			printf("\n");
+			printAndFlush(fout, "\n");
 			pass = (const char*) opabuffGetPos(&buff, 0);
 		}
 		if (pass == NULL) {
@@ -485,7 +493,7 @@ static void opacliDoAuth(opac* c, const char* pass, int prompt) {
 			break;
 		}
 
-		fprintf(stderr, "auth failed\n");
+		printAndFlush(fout, "auth failed\n");
 		if (!prompt) {
 			opabuffFree(&buff);
 			exit(EXIT_FAILURE);
@@ -493,6 +501,33 @@ static void opacliDoAuth(opac* c, const char* pass, int prompt) {
 	}
 
 	opabuffFree(&buff);
+}
+
+static void opacliDoAuth(opac* c, const char* pass, int prompt) {
+	if (prompt && (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO))) {
+		// handle case where user has redirected stdin from a file and wants to type a password in terminal
+#ifdef _WIN32
+		FILE* fin  = fopen("CONIN$",  "r+");
+		FILE* fout = fopen("CONOUT$", "a");
+		if (fin == NULL || fout == NULL) {
+			OPALOGERR("cannot open CONIN$ or CONOUT$ to prompt for password");
+			exit(EXIT_FAILURE);
+		}
+		opacliDoAuth2(c, pass, prompt, fin, fout);
+		fclose(fin);
+		fclose(fout);
+#else
+		FILE* ftty = fopen("/dev/tty", "r+");
+		if (ftty == NULL) {
+			OPALOGERR("cannot open /dev/tty to prompt for password");
+			exit(EXIT_FAILURE);
+		}
+		opacliDoAuth2(c, pass, prompt, ftty, ftty);
+		fclose(ftty);
+#endif
+	} else {
+		opacliDoAuth2(c, pass, prompt, stdin, stdout);
+	}
 }
 
 #ifdef _WIN32
