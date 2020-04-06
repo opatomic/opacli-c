@@ -108,6 +108,14 @@ ECHO \uff22
 ECHO \u30dD
 ECHO \u0105\u30dD
 
+echo \uD834\uDD1E
+echo 𝄞
+echo \uD834\uDD1E𝄞
+echo \ud83d\ude1e
+
+echo zażółć
+echo qweąęėšų
+
 ECHO "~base64bw=="
 ECHO "~base64b3A="
 
