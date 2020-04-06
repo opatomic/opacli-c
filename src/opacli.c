@@ -26,6 +26,12 @@
 #ifndef STDIN_FILENO
 #define STDIN_FILENO _fileno(stdin)
 #endif
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO _fileno(stdout)
+#endif
+#ifndef STDERR_FILENO
+#define STDERR_FILENO _fileno(stderr)
+#endif
 #ifndef USELINENOISE
 #define USELINENOISE 0
 #endif
@@ -53,6 +59,7 @@
 #include "opaso.h"
 #include "opasock.h"
 #include "licenses.h"
+#include "winutils.h"
 
 
 #ifndef OPACLI_VERSION
@@ -98,6 +105,27 @@ static void printUsage(const char* bin, int exitCode) {
 	exit(exitCode);
 }
 
+static int opaGetLine2(FILE* f, opabuff* b) {
+	int err = opabuffSetLen(b, 0);
+	while (!err) {
+		int ch = fgetc(f);
+		if (ch == EOF) {
+			if (ferror(f)) {
+				LOGSYSERRNO();
+				err = OPA_ERR_INTERNAL;
+			}
+			break;
+		}
+		if (ch == '\n') {
+			// do not include \n char at end of buffer
+			err = opabuffAppend1(b, 0);
+			break;
+		}
+		err = opabuffAppend1(b, ch);
+	}
+	return err;
+}
+
 #ifdef _WIN32
 
 static void usleep(unsigned long usec) {
@@ -120,60 +148,41 @@ static void usleep(unsigned long usec) {
 	}
 }
 
-static int opacliWideToUtf8(const wchar_t* wsrc, char** pUtf8Str) {
-	int reqLen = WideCharToMultiByte(CP_UTF8, 0, wsrc, -1, NULL, 0, NULL, NULL);
-	if (reqLen == 0) {
-		// cannot convert string
-		// TODO: better log message; just log and let user enter another string?
-		LOGWINERR();
-		return OPA_ERR_INTERNAL;
-	}
-	char* utf8str = OPAMALLOC(reqLen);
-	if (utf8str == NULL) {
-		return OPA_ERR_NOMEM;
-	}
-	int checkRes = WideCharToMultiByte(CP_UTF8, 0, wsrc, -1, utf8str, reqLen, NULL, NULL);
-	if (checkRes != reqLen) {
-		OPAFREE(utf8str);
-		OPALOGERR("WideCharToMultiByte result differs");
-		return OPA_ERR_INTERNAL;
-	}
-	*pUtf8Str = utf8str;
-	return 0;
-}
-
-static int opaGetLine(FILE* f, opabuff* b) {
-	int oldmode = _setmode(_fileno(f), _O_U16TEXT);
+static int opaGetLineWinConsole(opabuff* b) {
 	int err = 0;
+	HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
 	wchar_t* wstr = NULL;
 	size_t wlen = 0;
 	while (!err) {
-		wint_t ch = fgetwc(f);
-		if (ch == WEOF) {
-			if (ferror(f)) {
-				LOGSYSERRNO();
-				err = OPA_ERR_INTERNAL;
+		wchar_t tmp[1];
+		DWORD numRead;
+		// note: ReadConsoleW is used because fgetwc has odd behavior when compiled on mingw-64 vs msvc. When
+		//  compiled with mingw-64, fgetwc may return an extra newline character (does on win10; doesn't on win2k).
+		//  Also, fgetwc does not seem to work right when trying to read unicode chars on win2k.
+		//  In general, fgetwc seems buggy and inconsistent.
+		if (!ReadConsoleW(h, tmp, sizeof(tmp) / sizeof(tmp[0]), &numRead, NULL)) {
+			LOGWINERR();
+			err = OPA_ERR_INTERNAL;
+		}
+		if (!err) {
+			wchar_t* newStr = OPAREALLOC(wstr, sizeof(wchar_t) * (wlen + numRead));
+			if (newStr == NULL) {
+				err = OPA_ERR_NOMEM;
+			} else {
+				wstr = newStr;
+				memcpy(wstr + wlen, tmp, numRead * sizeof(wchar_t));
+				wlen += numRead;
 			}
-			break;
 		}
-		wchar_t* newStr = OPAREALLOC(wstr, sizeof(wchar_t) * (wlen + 2));
-		if (newStr == NULL) {
-			err = OPA_ERR_NOMEM;
-		} else {
-			wstr = newStr;
-			wstr[wlen++] = ch;
-		}
-		if (!err && ch == '\n' && wlen >= 2 && wstr[wlen - 2] == '\n') {
-			// TODO: does windows always return 2 '\n' characters when user presses <enter>?
-			// do not include \n chars at end of buffer
+		if (!err && wlen > 0 && wstr[wlen - 1] == '\n') {
 			char* utf8Str = NULL;
-			wstr[wlen - 2] = 0;
-			if (!err) {
-				err = opacliWideToUtf8(wstr, &utf8Str);
+			wstr[wlen - 1] = 0;
+			if (wlen > 1 && wstr[wlen - 2] == '\r') {
+				wstr[wlen - 2] = 0;
 			}
+			err = winWideToUtf8(wstr, &utf8Str);
 			if (!err) {
 				opabuffFree(b);
-				//OPAFREE(b->data);
 				b->data = (uint8_t*) utf8Str;
 				b->len = strlen(utf8Str) + 1;
 				b->cap = b->len;
@@ -182,30 +191,23 @@ static int opaGetLine(FILE* f, opabuff* b) {
 		}
 	}
 	OPAFREE(wstr);
-	_setmode(_fileno(f), oldmode);
 	return err;
 }
-#else
+
 static int opaGetLine(FILE* f, opabuff* b) {
-	int err = opabuffSetLen(b, 0);
-	while (!err) {
-		int ch = fgetc(f);
-		if (ch == EOF) {
-			if (ferror(f)) {
-				LOGSYSERRNO();
-				err = OPA_ERR_INTERNAL;
-			}
-			break;
-		}
-		if (ch == '\n') {
-			// do not include \n char at end of buffer
-			err = opabuffAppend1(b, 0);
-			break;
-		}
-		err = opabuffAppend1(b, ch);
+	if (isatty(_fileno(f))) {
+		return opaGetLineWinConsole(b);
+	} else {
+		return opaGetLine2(f, b);
 	}
-	return err;
 }
+
+#else
+
+static int opaGetLine(FILE* f, opabuff* b) {
+	return opaGetLine2(f, b);
+}
+
 #endif
 
 static void opacliConnect(const char* addr, uint16_t port) {
@@ -493,7 +495,63 @@ static void opacliDoAuth(opac* c, const char* pass, int prompt) {
 	opabuffFree(&buff);
 }
 
-int main(int argc, const char* argv[]) {
+#ifdef _WIN32
+static void winPrintUtf8(FILE* f, const char* str) {
+	int fd = _fileno(f);
+	if (!isatty(fd)) {
+		fputs(str, f);
+		return;
+	}
+	wchar_t* wideStr = NULL;
+	int err = winUtf8ToWide(str, &wideStr);
+	if (!err) {
+		HANDLE h;
+		if (fd == STDOUT_FILENO) {
+			h = GetStdHandle(STD_OUTPUT_HANDLE);
+		} else if (fd == STDERR_FILENO) {
+			h = GetStdHandle(STD_ERROR_HANDLE);
+		} else {
+			h = INVALID_HANDLE_VALUE;
+		}
+		if (h != INVALID_HANDLE_VALUE) {
+			fflush(f);
+			// note: _setmode + fputws doesn't seem to work on win2k; some unicode chars do not print
+			WriteConsoleW(h, wideStr, wcslen(wideStr), NULL, NULL);
+		} else {
+			OPALOGERR("unknown file");
+		}
+	}
+	OPAFREE(wideStr);
+}
+#endif
+
+static void printResult(const opacReq* req, const char* indent) {
+	// TODO: when stringifying, should detect whether characters can be displayed and if not then escape to Unicode
+	//   escape sequence. how to determine if char is printable? isprint/iswprint?
+	char* resultStr = opasoStringify(opacReqGetResponse(req), indent);
+	if (resultStr != NULL) {
+		if (opacReqResponseIsErr(req)) {
+			fputs(STR_ERROR, stderr);
+			#ifdef _WIN32
+				winPrintUtf8(stderr, resultStr);
+			#else
+				fputs(resultStr, stderr);
+			#endif
+		} else {
+			#ifdef _WIN32
+				winPrintUtf8(stdout, resultStr);
+			#else
+				fputs(resultStr, stdout);
+			#endif
+		}
+		fputs("\n", stdout);
+	} else {
+		fprintf(stderr, "error stringifying response\n");
+	}
+	OPAFREE(resultStr);
+}
+
+static int mainInternal(int argc, const char* argv[]) {
 	#ifdef _WIN32
 		opacliWsaStartup();
 	#endif
@@ -673,17 +731,7 @@ int main(int argc, const char* argv[]) {
 		opacReqInit(&req);
 		opacReqSetRequestBuff(&req, ureq.buff);
 		opacQueueSendRecv(&c, &req);
-		char* resultStr = opasoStringify(opacReqGetResponse(&req), indent);
-		if (resultStr != NULL) {
-			if (opacReqResponseIsErr(&req)) {
-				fprintf(stderr, "%s%s\n", STR_ERROR, resultStr);
-			} else {
-				printf("%s\n", resultStr);
-			}
-		} else {
-			fprintf(stderr, "error stringifying response\n");
-		}
-		OPAFREE(resultStr);
+		printResult(&req, indent);
 		opacReqFreeResponse(&req);
 
 		if (!opacIsOpen(&c)) {
@@ -723,3 +771,27 @@ int main(int argc, const char* argv[]) {
 
 	return 0;
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t* argv[]);
+int wmain(int argc, wchar_t* argv[]) {
+	char** argv2 = OPAMALLOC(argc * sizeof(char*));
+	if (argv2 == NULL) {
+		OPALOGERR("unable to allocate memory");
+		exit(EXIT_FAILURE);
+	}
+	for (int i = 0; i < argc; ++i) {
+		int err = winWideToUtf8(argv[i], &argv2[i]);
+		if (err) {
+			OPALOGERR("error converting argv wide string to utf-8");
+			exit(EXIT_FAILURE);
+		}
+	}
+	// note: leaking memory (argv utf-8 strings and argv2 array) because program is exiting
+	return mainInternal(argc, (const char**) argv2);
+}
+#else
+int main(int argc, const char* argv[]) {
+	return mainInternal(argc, argv);
+}
+#endif
