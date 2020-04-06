@@ -615,7 +615,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	char readArgFromStdin = 0;
 	char authPrompt = 0;
 	char istty = isatty(STDIN_FILENO);
-	char useLinenoise = USELINENOISE && istty;
+	char useLinenoise = USELINENOISE && istty && isatty(STDOUT_FILENO);
 	long interval = 0;
 	long long repeat = 1;
 
