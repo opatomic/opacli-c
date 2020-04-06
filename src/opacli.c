@@ -579,7 +579,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	uint16_t port = 4567;
 	char readArgFromStdin = 0;
 	char authPrompt = 0;
-	int istty = isatty(STDIN_FILENO);
+	char istty = isatty(STDIN_FILENO);
 	char useLinenoise = USELINENOISE && istty;
 	long interval = 0;
 	long long repeat = 1;
@@ -634,7 +634,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	opacliConnect(host, port);
 
 	// detect whether AUTH is required
-	if (!authPrompt && istty && usercmdIdx == 0 && opacIsAuthNeeded(&c)) {
+	if (!authPrompt && istty && authPass == NULL && usercmdIdx == 0 && opacIsAuthNeeded(&c)) {
 		authPrompt = 1;
 	}
 
