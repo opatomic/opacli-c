@@ -10,7 +10,7 @@ const char* opatomicLicense =
 "THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n";
 
 
-const char* libtomLicense = 
+const char* libtomLicense =
 "libtommath\n"
 "https://github.com/libtom/libtommath\n"
 "\n"
@@ -73,7 +73,7 @@ const char* linenoiseLicense =
 "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
 
 
-const char* libdlbLicense = 
+const char* libdlbLicense =
 "libdlb - data structures and utilities library\n"
 "https://github.com/dlbeer/libdlb\n"
 "\n"
