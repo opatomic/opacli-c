@@ -48,7 +48,7 @@
 	va_start(args, fmt2);                                \
 	vsnprintf(tmp, sizeof(tmp), fmt2, args);             \
 	va_end(args);                                        \
-	fprintf(f, fmt1 "%s\n", func, filename, line, tmp);
+	fprintf(f, fmt1 "%s\n", func, opaBasename(filename), line, tmp);
 
 uint64_t opaTimeMillis(void) {
 	// https://stackoverflow.com/questions/1695288/getting-the-current-time-in-milliseconds-from-the-system-clock-in-windows
@@ -77,7 +77,7 @@ void opacoreLogWinErrCode(const char* func, const char* filename, int line, DWOR
 	va_list args;                                        \
 	va_start(args, fmt2);                                \
 	flockfile(f);                                        \
-	fprintf(f, fmt1, func, filename, line);              \
+	fprintf(f, fmt1, func, opaBasename(filename), line); \
 	vfprintf(f, fmt2, args);                             \
 	fprintf(f, "\n");                                    \
 	funlockfile(f);                                      \
@@ -92,10 +92,17 @@ uint64_t opaTimeMillis(void) {
 	return (t.tv_sec * 1000) + (t.tv_usec / 1000);
 }
 
+void opaszmem(void* s, size_t n) {
+	// TODO: is this correct?
+	// http://www.daemonology.net/blog/2014-09-04-how-to-zero-a-buffer.html
+	static void* (* const volatile memsetFunc)(void*, int, size_t) = memset;
+	(memsetFunc)(s, 0, n);
+}
+
 #endif
 
 
-const char* opacoreFileBasename(const char* file) {
+static const char* opaBasename(const char* file) {
 	const char* pos = strrchr(file, OPA_DIRCHAR);
 	return pos == NULL ? file : pos + 1;
 }
@@ -195,6 +202,13 @@ size_t opaviGetStoredLen(const uint8_t* buff) {
 	return __builtin_ctz(*buff | 0x100) + 1;
 }
 */
+
+void opazeroAndFree(void* ptr, size_t len) {
+	if (ptr != NULL) {
+		opaszmem(ptr, len);
+		OPAFREE(ptr);
+	}
+}
 
 size_t opaviGetStoredLen(const uint8_t* buff) {
 	const uint8_t* start = buff;
