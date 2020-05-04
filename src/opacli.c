@@ -298,6 +298,7 @@ static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	mask = mask > 0x1f && mask < 0x7f ? mask : 0;
 
 	while (!err) {
+		// TODO: on windows, use wide functions to read command line (support unicode passwords)
 		int ch = fgetc(fin);
 		if (ch == EOF) {
 			err = OPA_ERR_INTERNAL;
@@ -307,7 +308,8 @@ static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 			break;
 		}
 		if (ch != 0x7f && ch != 0x08) {
-			if (mask) {
+			if (mask && (ch <= 0x7f || (ch & 0x40))) {
+				// only print mask if byte read was 1st byte of utf-8 character
 				fputc(mask, fout);
 			}
 			err = opabuffAppend1(b, ch);
@@ -317,7 +319,14 @@ static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 				fputc(' ', fout);
 				fputc(0x8, fout);
 			}
-			opabuffSetLen(b, opabuffGetLen(b) - 1);
+			while (opabuffGetLen(b) > 0) {
+				uint8_t delb = *opabuffGetPos(b, opabuffGetLen(b) - 1);
+				opabuffSetLen(b, opabuffGetLen(b) - 1);
+				if (delb <= 0x7f || (delb & 0x40)) {
+					// if deleted byte was 1st byte of utf-8 character, then done deleting bytes
+					break;
+				}
+			}
 		}
 	}
 	if (!err) {
