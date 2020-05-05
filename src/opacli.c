@@ -148,55 +148,53 @@ static void usleep(unsigned long usec) {
 	}
 }
 
-static int opaGetLineWinConsole(opabuff* b) {
+static int opaGetLineWinConsole(HANDLE h, opabuff* b) {
 	int err = 0;
-	HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
-	wchar_t* wstr = NULL;
-	size_t wlen = 0;
+	opabuff wbuff = {0};
+	opabuffInit(&wbuff, b->flags & OPABUFF_F_ZERO);
 	while (!err) {
-		wchar_t tmp[1];
 		DWORD numRead;
+		err = opabuffAppend(&wbuff, NULL, sizeof(wchar_t));
 		// note: ReadConsoleW is used because fgetwc has odd behavior when compiled on mingw-64 vs msvc. When
 		//  compiled with mingw-64, fgetwc may return an extra newline character (does on win10; doesn't on win2k).
 		//  Also, fgetwc does not seem to work right when trying to read unicode chars on win2k.
 		//  In general, fgetwc seems buggy and inconsistent.
-		if (!ReadConsoleW(h, tmp, sizeof(tmp) / sizeof(tmp[0]), &numRead, NULL)) {
-			LOGWINERR();
-			err = OPA_ERR_INTERNAL;
-		}
 		if (!err) {
-			wchar_t* newStr = OPAREALLOC(wstr, sizeof(wchar_t) * (wlen + numRead));
-			if (newStr == NULL) {
-				err = OPA_ERR_NOMEM;
-			} else {
-				wstr = newStr;
-				memcpy(wstr + wlen, tmp, numRead * sizeof(wchar_t));
-				wlen += numRead;
+			wchar_t* wstr = (wchar_t*) wbuff.data;
+			size_t wlen = opabuffGetLen(&wbuff) / sizeof(wchar_t);
+			if (!err && !ReadConsoleW(h, wstr + wlen - 1, 1, &numRead, NULL)) {
+				LOGWINERR();
+				err = OPA_ERR_INTERNAL;
 			}
-		}
-		if (!err && wlen > 0 && wstr[wlen - 1] == '\n') {
-			char* utf8Str = NULL;
-			wstr[wlen - 1] = 0;
-			if (wlen > 1 && wstr[wlen - 2] == '\r') {
-				wstr[wlen - 2] = 0;
+			if (!err && numRead == 0) {
+				OPALOGERR("Read 0 in ReadConsoleW()");
+				err = OPA_ERR_INTERNAL;
 			}
-			err = winWideToUtf8(wstr, &utf8Str);
-			if (!err) {
-				opabuffFree(b);
-				b->data = (uint8_t*) utf8Str;
-				b->len = strlen(utf8Str) + 1;
-				b->cap = b->len;
+			if (!err && wlen > 0 && wstr[wlen - 1] == '\n') {
+				char* utf8Str = NULL;
+				wstr[wlen - 1] = 0;
+				if (wlen > 1 && wstr[wlen - 2] == '\r') {
+					wstr[wlen - 2] = 0;
+				}
+				err = winWideToUtf8(wstr, &utf8Str);
+				if (!err) {
+					opabuffFree(b);
+					b->data = (uint8_t*) utf8Str;
+					b->len = strlen(utf8Str) + 1;
+					b->cap = b->len;
+				}
+				break;
 			}
-			break;
 		}
 	}
-	OPAFREE(wstr);
+	opabuffFree(&wbuff);
 	return err;
 }
 
 static int opaGetLine(FILE* f, opabuff* b) {
 	if (isatty(_fileno(f))) {
-		return opaGetLineWinConsole(b);
+		intptr_t inth = _get_osfhandle(_fileno(f));
+		return opaGetLineWinConsole((HANDLE) inth, b);
 	} else {
 		return opaGetLine2(f, b);
 	}
@@ -291,6 +289,30 @@ static int linenoiseHistoryAdd(const char* line) {
 
 
 
+#ifdef _WIN32
+static int opacliGetPassFromTerm(FILE* fin, FILE* fout, int mask, opabuff* b) {
+	// TODO: print mask character when user types a character
+	UNUSED(fout);
+	UNUSED(mask);
+	DWORD origMode;
+	intptr_t inth = _get_osfhandle(_fileno(fin));
+	HANDLE h = (HANDLE) inth;
+	if (!GetConsoleMode(h, &origMode)) {
+		LOGWINERR();
+		return OPA_ERR_INTERNAL;
+	}
+	if (!SetConsoleMode(h, origMode & (~ENABLE_ECHO_INPUT))) {
+		LOGWINERR();
+		return OPA_ERR_INTERNAL;
+	}
+	int err = opaGetLineWinConsole(h, b);
+	if (!SetConsoleMode(h, origMode)) {
+		LOGWINERR();
+	}
+	return err;
+}
+#else
+
 static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	int err = 0;
 	size_t origLen = opabuffGetLen(b);
@@ -298,7 +320,6 @@ static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	mask = mask > 0x1f && mask < 0x7f ? mask : 0;
 
 	while (!err) {
-		// TODO: on windows, use wide functions to read command line (support unicode passwords)
 		int ch = fgetc(fin);
 		if (ch == EOF) {
 			err = OPA_ERR_INTERNAL;
@@ -341,28 +362,6 @@ static int opacliReadPass(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	return err;
 }
 
-#ifdef _WIN32
-static int opacliGetPassFromTerm(FILE* fin, FILE* fout, int mask, opabuff* b) {
-	// TODO: print mask character when user types a character
-	UNUSED(mask);
-	DWORD origMode;
-	intptr_t inth = _get_osfhandle(_fileno(fin));
-	HANDLE h = (HANDLE) inth;
-	if (!GetConsoleMode(h, &origMode)) {
-		LOGWINERR();
-		return OPA_ERR_INTERNAL;
-	}
-	if (!SetConsoleMode(h, origMode & (~ENABLE_ECHO_INPUT))) {
-		LOGWINERR();
-		return OPA_ERR_INTERNAL;
-	}
-	int err = opacliReadPass(fin, fout, 0, b);
-	if (!SetConsoleMode(h, origMode)) {
-		LOGWINERR();
-	}
-	return err;
-}
-#else
 static int opacliGetPassFromTerm(FILE* fin, FILE* fout, int mask, opabuff* b) {
 	struct termios origAttr;
 	struct termios hideAttr;
