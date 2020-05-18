@@ -767,6 +767,9 @@ static int mainInternal(int argc, const char* argv[]) {
 			if (useLinenoise) {
 				linenoiseHistoryAdd(line);
 			}
+			if (usercmdIdx > 0) {
+				break;
+			}
 			continue;
 		}
 
