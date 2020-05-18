@@ -27,6 +27,7 @@ $CC $GCCOPTS $LDFLAGS -o "opacli" $FLIST
 ./opacli --version
 ./opacli --help
 ./opacli < ../../test/cmds.txt
+./opacli ECHO '"'
 ./opacli -h localhost -p 4567 -a nopw -r 3 -i 0.01 ECHO hix3
 printf "hi_from_stdin_x2" | ./opacli -x -r 2 ECHO
 ./opacli -a "" ECHO hi
