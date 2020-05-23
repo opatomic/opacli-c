@@ -5,11 +5,11 @@
 
 #include <string.h>
 
-#include "base64.h"
 #include "opabigdec.h"
 #include "opacore.h"
 #include "opaso.h"
 
+static const char* HEXCHARS = "0123456789ABCDEF";
 
 int opasoIsNumber(uint8_t type) {
 	switch (type) {
@@ -110,14 +110,14 @@ static int opasoWriteIndent(opabuff* b, const char* space, unsigned int depth) {
 	return err;
 }
 
-static int opasoEscapeString(const uint8_t* src, size_t len, opabuff* b) {
-	static const char* HEXCHARS = "0123456789ABCDEF";
+static int opasoEscapeString(const uint8_t* src, size_t len, int isBin, opabuff* b) {
 	int err = 0;
 	const uint8_t* end = src + len;
 	for (; src < end && !err; ++src) {
 		uint8_t ch = *src;
 		switch (ch) {
-			case '"':  err = opabuffAppendStr(b, "\\\""); break;
+			case '"':  err = opabuffAppendStr(b, isBin ? "\""  : "\\\""); break;
+			case '\'': err = opabuffAppendStr(b, isBin ? "\\'" : "'"   ); break;
 			case '\\': err = opabuffAppendStr(b, "\\\\"); break;
 			case '\t': err = opabuffAppendStr(b, "\\t" ); break;
 			case '\r': err = opabuffAppendStr(b, "\\r" ); break;
@@ -125,17 +125,43 @@ static int opasoEscapeString(const uint8_t* src, size_t len, opabuff* b) {
 			case '\b': err = opabuffAppendStr(b, "\\b" ); break;
 			case '\f': err = opabuffAppendStr(b, "\\f" ); break;
 			default:
-				if (ch < 0x20) {
-					// must escape control chars
-					uint8_t tmp[6] = {'\\', 'u', '0', '0'};
-					tmp[4] = HEXCHARS[(ch & 0xF0) >> 4];
-					tmp[5] = HEXCHARS[(ch & 0x0F)];
-					err = opabuffAppend(b, tmp, 6);
+				if (ch < 0x20 || ch == 0x7f) {
+					// escape control chars
+					// note: according to json specs, 0x7f can remain unescaped, however it's a
+					//       control character that may not be visible - so escape it here.
+					// TODO: also escape \u0080-\u009f? other unicode control characters?
+					//       https://stackoverflow.com/questions/3770117/what-is-the-range-of-unicode-printable-characters
+					err = opabuffAppendStr(b, isBin ? "\\x" : "\\u00");
+					if (!err) {
+						uint8_t tmp[2];
+						tmp[0] = HEXCHARS[(ch & 0xF0) >> 4];
+						tmp[1] = HEXCHARS[(ch & 0x0F)];
+						err = opabuffAppend(b, tmp, 2);
+					}
 				} else {
 					err = opabuffAppend1(b, ch);
 				}
 				break;
 		}
+	}
+	return err;
+}
+
+static int opasoEscapeBin(const uint8_t* src, size_t len, opabuff* b) {
+	int err = 0;
+	const uint8_t* end = src + len;
+	while (src < end && !err) {
+		const uint8_t* invch = opaFindInvalidUtf8(src, end - src);
+		if (invch == NULL) {
+			err = opasoEscapeString(src, end - src, 1, b);
+			break;
+		}
+		err = opasoEscapeString(src, invch - src, 1, b);
+		if (!err) {
+			char tmp[4] = {'\\', 'x', HEXCHARS[((*invch) >> 4) & 0xF], HEXCHARS[(*invch) & 0xF]};
+			err = opabuffAppend(b, tmp, 4);
+		}
+		src = invch + 1;
 	}
 	return err;
 }
@@ -148,7 +174,7 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 		case OPADEF_FALSE:       return opabuffAppendStr(b, "false");
 		case OPADEF_TRUE:        return opabuffAppendStr(b, "true");
 		case OPADEF_SORTMAX:     return opabuffAppendStr(b, "SORTMAX");
-		case OPADEF_BIN_EMPTY:   return opabuffAppendStr(b, "\"~base64\"");
+		case OPADEF_BIN_EMPTY:   return opabuffAppendStr(b, "''");
 		case OPADEF_STR_EMPTY:   return opabuffAppendStr(b, "\"\"");
 		case OPADEF_ARRAY_EMPTY: return opabuffAppendStr(b, "[]");
 
@@ -184,20 +210,16 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 			return err;
 		}
 		case OPADEF_BIN_LPVI: {
-			int err = opabuffAppendStr(b, "\"~base64");
+			int err = opabuffAppend1(b, '\'');
 			if (!err) {
 				uint64_t slen;
 				err = opaviLoadWithErr(src + 1, &slen, &src);
 				if (!err) {
-					size_t pos = opabuffGetLen(b);
-					err = opabuffAppend(b, NULL, base64EncodeLen(slen, 0));
-					if (!err) {
-						base64Encode(src, slen, opabuffGetPos(b, pos), 0);
-					}
+					err = opasoEscapeBin(src, slen, b);
 				}
 			}
 			if (!err) {
-				err = opabuffAppend1(b, '"');
+				err = opabuffAppend1(b, '\'');
 			}
 			return err;
 		}
@@ -206,14 +228,8 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 			if (!err) {
 				uint64_t slen;
 				err = opaviLoadWithErr(src + 1, &slen, &src);
-				if (!err && slen > 0) {
-					if (*src == '~' || *src == '^' || *src == '`') {
-						// first char needs to be escaped
-						err = opabuffAppend1(b, '~');
-					}
-					if (!err) {
-						err = opasoEscapeString(src, slen, b);
-					}
+				if (!err) {
+					err = opasoEscapeString(src, slen, 0, b);
 				}
 			}
 			if (!err) {

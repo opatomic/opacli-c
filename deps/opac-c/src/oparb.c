@@ -5,7 +5,6 @@
 
 #include <string.h>
 
-#include "base64.h"
 #include "opabigdec.h"
 #include "opacore.h"
 #include "oparb.h"
@@ -198,10 +197,6 @@ void oparbStopArray(oparb* rb) {
 
 
 
-static int startsWith(const char* s, const char* prefix) {
-	return strncmp(s, prefix, strlen(prefix)) == 0;
-}
-
 static uint32_t hexVal(char ch) {
 	if (ch <= '9' && ch >= '0') {
 		return ch - '0';
@@ -213,19 +208,42 @@ static uint32_t hexVal(char ch) {
 	return 0xFFFFFFFF;
 }
 
+// TODO: use isalnum instead?
+static int isalphanum(int ch) {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9');
+}
+
+static int isValidEscapeChar(int ch) {
+	if (isalphanum(ch)) {
+		switch (ch) {
+			case 'b':
+			case 'f':
+			case 'n':
+			case 'r':
+			case 't':
+			case 'u':
+			case 'x':
+				return 1;
+			default:
+				return 0;
+		}
+	} else if (ch <= 0x20) {
+		return ch == '\r' || ch == '\n' || ch == '\t' || ch == ' ';
+	} else {
+		return ch != 0x7f;
+	}
+}
+
 static int oparbStrUnescape(const char* s, const char* end, opabuff* b) {
 	int err = 0;
 	for (; !err && s < end; ++s) {
 		char ch = *s;
 		if (ch == '\\') {
 			++s;
-			if (s >= end) {
+			if (s >= end || !isValidEscapeChar(*s)) {
 				return OPA_ERR_PARSE;
 			}
 			switch (*s) {
-				case '"':  err = opabuffAppend1(b, '"' ); break;
-				case '\\': err = opabuffAppend1(b, '\\'); break;
-				case '/':  err = opabuffAppend1(b, '/' ); break;
 				case 'b':  err = opabuffAppend1(b, '\b'); break;
 				case 'f':  err = opabuffAppend1(b, '\f'); break;
 				case 'n':  err = opabuffAppend1(b, '\n'); break;
@@ -306,7 +324,8 @@ static int oparbStrUnescape(const char* s, const char* end, opabuff* b) {
 					break;
 				}
 				default:
-					return OPA_ERR_PARSE;
+					err = opabuffAppend1(b, *s);
+					break;
 			}
 		} else {
 			err = opabuffAppend1(b, ch);
@@ -315,41 +334,15 @@ static int oparbStrUnescape(const char* s, const char* end, opabuff* b) {
 	return err;
 }
 
-static void oparbAddUnEscapedStr(oparb* rb, const char* s, size_t len) {
-	if (!rb->err && len > 0 && *s == '~') {
-		if (len >= 4 && startsWith(s, "~bin")) {
-			oparbAddBin(rb, len - 4, s + 4);
-			return;
-		} else if (len >= 7 && startsWith(s, "~base64")) {
-			s += 7;
-			len -= 7;
-			size_t decLen = base64DecodeLen((const uint8_t*) s, len);
-			oparbAddBin(rb, decLen, NULL);
-			if (!rb->err && !base64Decode(s, len, opabuffGetPos(&rb->buff, opabuffGetLen(&rb->buff) - decLen))) {
-				rb->errDesc = "base64 is invalid";
-				rb->err = OPA_ERR_PARSE;
-			}
-			return;
-		} else if (len >= 2 && (s[1] == '~' || s[1] == '^' || s[1] == '`')) {
-			++s;
-			--len;
-		} else {
-			rb->errDesc = "unknown ~ prefix sequence";
-			rb->err = OPA_ERR_PARSE;
-			return;
-		}
+static void oparbAddUnEscapedStrOrBin(oparb* rb, const char* s, size_t len, int type) {
+	if (!rb->err && type == OPADEF_STR_LPVI && opaFindInvalidUtf8((const uint8_t*)s, len) != NULL) {
+		rb->errDesc = "invalid utf-8 bytes in string";
+		rb->err = OPA_ERR_PARSE;
 	}
-	if (!rb->err) {
-		const uint8_t* invutf8 = opaFindInvalidUtf8((const uint8_t*)s, len);
-		if (invutf8 == NULL) {
-			oparbAddStr(rb, len, s);
-		} else {
-			oparbAddBin(rb, len, s);
-		}
-	}
+	oparbAppendStrOrBin(rb, len, s, type);
 }
 
-static void oparbAddUserString(oparb* rb, const char* s, const char* end) {
+static void oparbAddUserStrOrBin(oparb* rb, const char* s, const char* end, int type) {
 	opabuff tmp = {0};
 	if (!rb->err) {
 		rb->err = oparbStrUnescape(s, end, &tmp);
@@ -357,9 +350,7 @@ static void oparbAddUserString(oparb* rb, const char* s, const char* end) {
 			rb->errDesc = "invalid escape sequence";
 		}
 	}
-	if (!rb->err) {
-		oparbAddUnEscapedStr(rb, (const char*) opabuffGetPos(&tmp, 0), opabuffGetLen(&tmp));
-	}
+	oparbAddUnEscapedStrOrBin(rb, (const char*) opabuffGetPos(&tmp, 0), opabuffGetLen(&tmp), type);
 	opabuffFree(&tmp);
 }
 
@@ -389,13 +380,13 @@ static void oparbAddUserToken(oparb* rb, const char* s, const char* end) {
 	} else if (opaIsNumStr(s, end)) {
 		oparbAddNumStr(rb, s);
 	} else {
-		oparbAddUserString(rb, s, end);
+		oparbAddUserStrOrBin(rb, s, end, OPADEF_STR_LPVI);
 	}
 }
 
-static const char* oparbFindQuoteEnd(const char* str) {
+static const char* oparbFindQuoteEnd(const char* str, char ch) {
 	while (1) {
-		if (*str == '"') {
+		if (*str == ch) {
 			return str;
 		} else if (*str == '\\') {
 			++str;
@@ -411,26 +402,16 @@ static const char* oparbFindQuoteEnd(const char* str) {
 
 static const char* oparbFindTokenEnd(const char* str) {
 	while (1) {
-		switch (*str) {
-			case '\\':
-				if (str[1] != 0) {
-					str++;
-				}
-				break;
-			case 0:
-			case ',':
-			case '[':
-			case ']':
-			case '{':
-			case '}':
-			case '"':
-			case ' ':
-			case '\t':
-			case '\r':
-			case '\n':
-				return str;
+		int ch = *str;
+		// TODO: whitelist some more characters that can be unquoted and unescaped? ie ":/*?"
+		// note: slash character '/' probably cannot be included here because it is used for comments
+		if (isalphanum(ch) || ch < 0 || ch == '_' || ch == '.' || ch == '-' || ch == '+') {
+			++str;
+		} else if (ch == '\\' && str[1] != 0) {
+			str += 2;
+		} else {
+			return str;
 		}
-		++str;
 	}
 }
 
@@ -444,21 +425,40 @@ static oparb oparbParseUserCommandWithId(const char* s, const uint8_t* id, size_
 			case 0:
 				goto Done;
 			case '"':
+			case '\'':
 				++s;
-				end = oparbFindQuoteEnd(s);
+				end = oparbFindQuoteEnd(s, s[-1]);
 				if (end == NULL) {
-					rb.errDesc = "string end quote not found";
+					rb.errDesc = "string or bin end char not found";
 					rb.err = OPA_ERR_PARSE;
 					goto Done;
 				}
-				oparbAddUserString(&rb, s, end);
+				oparbAddUserStrOrBin(&rb, s, end, s[-1] == '\'' ? OPADEF_BIN_LPVI : OPADEF_STR_LPVI);
 				s = end + 1;
 				break;
-			case '{':
-			case '}':
-				rb.errDesc = "object tokens '{' and '}' not supported";
-				rb.err = OPA_ERR_PARSE;
-				goto Done;
+			case '/':
+				if (s[1] == '/') {
+					const char* pos = strchr(s + 2, '\n');
+					if (pos == NULL) {
+						goto Done;
+					} else {
+						s = pos + 1;
+					}
+				} else if (s[1] == '*') {
+					const char* pos = strstr(s + 2, "*/");
+					if (pos == NULL) {
+						rb.errDesc = "end of comment \"*/\" not found";
+						rb.err = OPA_ERR_PARSE;
+						goto Done;
+					} else {
+						s = pos + 2;
+					}
+				} else {
+					rb.errDesc = "the / character must be inside quotes, escaped, or used as comment";
+					rb.err = OPA_ERR_PARSE;
+					goto Done;
+				}
+				break;
 			case '[':
 				oparbStartArray(&rb);
 				++depth;
@@ -483,6 +483,11 @@ static oparb oparbParseUserCommandWithId(const char* s, const uint8_t* id, size_
 				break;
 			default:
 				end = oparbFindTokenEnd(s);
+				if (end == s) {
+					rb.errDesc = "reserved/special/control characters must be inside quotes or escaped";
+					rb.err = OPA_ERR_PARSE;
+					goto Done;
+				}
 				oparbAddUserToken(&rb, s, end);
 				s = end;
 				break;
