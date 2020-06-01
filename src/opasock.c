@@ -14,7 +14,7 @@
 #include <ws2tcpip.h>
 // by including wspiapi.h, getaddrinfo() and related functions will be supported on win2k even though they
 //  are not available in the OS
-//  TODO: add a reference link for this
+//  See MS docs for getaddrinfo(): https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo
 // note: wspiapi.h needs to be included after ws2tcpip.h
 #include <wspiapi.h>
 #else
