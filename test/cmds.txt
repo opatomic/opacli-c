@@ -6,8 +6,8 @@ ECHO false
 ECHO true
 ECHO SORTMAX
 ECHO "	"
-ECHO [undefined null false true -1 0 123 ~bin ~binhello "" "string" []]
-ECHO [a b c 1 2 -345 34e 34ee 3.fff [] [[]] ~binh ~binhe ~binhel ~binhell ~binhello ~base64aGVsbG8]
+ECHO [undefined null false true -1 0 123 '' 'hello' "" "string" []]
+ECHO [a b c 1 2 -345 34e 34ee 3.fff [] [[]] 'h' 'he' 'hel' 'hell' 'hello' 'esc\'""esc']
 INCR aa
 ECHO hi
 INCR b
@@ -41,7 +41,7 @@ true
 1
 1.2
 ""
-~bin
+''
 []
 SORTMAX
 [ECHO]
@@ -57,7 +57,7 @@ ECHO hitab\t\t
 ECHO apos's
 ECHO quote`s
 
-TODO: add utf8 tests (valid and invalid)
+// TODO: add utf8 tests (valid and invalid)
 
 ECHO ESCAPE\ ESCAPE
 ECHO ESCAPE\"ESCAPE
@@ -94,10 +94,7 @@ ECHO "" "
 ECHO ]
 ECHO [
 ECHO "\
-ECHO "~base64XXX"
-ECHO ~
-ECHO ~~
-ECHO ~~string
+ECHO '\
 ECHO ESCAPE\u005a
 ECHO ESCAPE\u005A
 ECHO いろはにほへど
@@ -115,14 +112,6 @@ echo \ud83d\ude1e
 
 echo zażółć
 echo qweąęėšų
-
-ECHO "~base64bw=="
-ECHO "~base64b3A="
-
-ECHO "~base64a"
-ECHO "~base64.."
-ECHO "~base64...."
-ECHO "~base64bB"
 
 ECHO[]
 ECHO[[][][][][][[[]]]]
