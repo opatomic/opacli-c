@@ -153,7 +153,7 @@ static int opaGetLineWinConsole(HANDLE h, opabuff* b) {
 	opabuff wbuff = {0};
 	opabuffInit(&wbuff, b->flags & OPABUFF_F_ZERO);
 	while (!err) {
-		DWORD numRead;
+		DWORD numRead = 0;
 		err = opabuffAppend(&wbuff, NULL, sizeof(wchar_t));
 		// note: ReadConsoleW is used because fgetwc has odd behavior when compiled on mingw-64 vs msvc. When
 		//  compiled with mingw-64, fgetwc may return an extra newline character (does on win10; doesn't on win2k).
