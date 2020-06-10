@@ -26,11 +26,7 @@ testDeps git jq curl
 
 
 GHUSER="opatomic"
-#GHREPO=$(basename "$(dirname "$PWD")")
-echo "PWD=$PWD"
-echo "$(dirname "$PWD")"
-echo "GHREPO=$GHREPO"
-GHREPO="opacli-c"
+GHREPO=$(basename "$(dirname "$PWD")")
 if [[ -z "$GHTOKEN" ]]; then
 	GHTOKENFILE="${GHTOKENFILE:-$HOME/githubtoken}"
 	if [ ! -f "$GHTOKENFILE" ]; then
@@ -58,10 +54,25 @@ if [ "v$VERSION" != "$(git describe --exact-match --tags HEAD)" ]; then
 fi
 
 GHTAG="v$VERSION"
-GHRELID=$(curl -s -S "https://api.github.com/repos/$GHUSER/$GHREPO/releases/tags/v$VERSION" | jq ".id")
+GHRELURL="https://api.github.com/repos/$GHUSER/$GHREPO/releases/tags/v$VERSION"
+GHRELID=$(curl -s -S "$GHRELURL" | jq ".id")
 if [ "$GHRELID" = "null" ]; then
 	echo "creating github release $GHTAG"
 	GHRELID=$(curl -s -S -u "$GHUSER:$GHTOKEN" -X POST "https://api.github.com/repos/$GHUSER/$GHREPO/releases" -d "{\"tag_name\":\"$GHTAG\"}" | jq ".id")
+fi
+
+if [ "$GHRELID" = "null" ]; then
+	SLEEPTIME=10
+	echo "could not determine release id. sleeping $SLEEPTIME secs to allow github to update"
+	sleep $SLEEPTIME
+	GHRELID=$(curl -s -S "$GHRELURL" | jq ".id")
+fi
+
+if [ "$GHRELID" = "null" ]; then
+	echo "URL=$GHRELURL"
+	curl -s -S "$GHRELURL"
+	echo "error: could not determine release id"
+	exit 1
 fi
 
 
