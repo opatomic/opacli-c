@@ -1,0 +1,20 @@
+on:
+  release:
+    types:
+      - created
+
+name: Build and Publish Release Assets
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build and upload assets
+        env:
+          GHTOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cd build && ./publish
