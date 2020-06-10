@@ -14,7 +14,9 @@ testDeps() {
 # args: user, token, repo, releaseid, filename
 uploadAsset() {
 	echo "uploading $(basename "$5")"
-	curl -s -S -u "$1:$2" -H "Content-Type: application/octet-stream" --data-binary @"$5" "https://uploads.github.com/repos/$1/$3/releases/$4/assets?name=$(basename "$5")" > /dev/null
+	GHURL="https://uploads.github.com/repos/$1/$3/releases/$4/assets?name=$(basename "$5")"
+	curl -s -S -u "$1:$2" -H "Content-Type: application/octet-stream" --data-binary @"$5" "$GHURL"
+	echo "uploaded to $GHURL"
 }
 
 
@@ -24,7 +26,11 @@ testDeps git jq curl
 
 
 GHUSER="opatomic"
-GHREPO=$(basename "$(dirname "$PWD")")
+#GHREPO=$(basename "$(dirname "$PWD")")
+echo "PWD=$PWD"
+echo "$(dirname "$PWD")"
+echo "GHREPO=$GHREPO"
+GHREPO="opacli-c"
 if [[ -z "$GHTOKEN" ]]; then
 	GHTOKENFILE="${GHTOKENFILE:-$HOME/githubtoken}"
 	if [ ! -f "$GHTOKENFILE" ]; then
