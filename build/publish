@@ -55,22 +55,15 @@ fi
 
 GHTAG="v$VERSION"
 GHRELURL="https://api.github.com/repos/$GHUSER/$GHREPO/releases/tags/v$VERSION"
-GHRELID=$(curl -s -S "$GHRELURL" | jq ".id")
+GHRELID=$(curl -s -S -u "$GHUSER:$GHTOKEN" "$GHRELURL" | jq ".id")
 if [ "$GHRELID" = "null" ]; then
 	echo "creating github release $GHTAG"
 	GHRELID=$(curl -s -S -u "$GHUSER:$GHTOKEN" -X POST "https://api.github.com/repos/$GHUSER/$GHREPO/releases" -d "{\"tag_name\":\"$GHTAG\"}" | jq ".id")
 fi
 
 if [ "$GHRELID" = "null" ]; then
-	SLEEPTIME=10
-	echo "could not determine release id. sleeping $SLEEPTIME secs to allow github to update"
-	sleep $SLEEPTIME
-	GHRELID=$(curl -s -S "$GHRELURL" | jq ".id")
-fi
-
-if [ "$GHRELID" = "null" ]; then
 	echo "URL=$GHRELURL"
-	curl -s -S "$GHRELURL"
+	curl -s -S -u "$GHUSER:$GHTOKEN" "$GHRELURL"
 	echo "error: could not determine release id"
 	exit 1
 fi
