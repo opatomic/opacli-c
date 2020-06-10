@@ -4,10 +4,10 @@ on:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
-name: Create Release
+name: Create, Build, Upload Release
 
 jobs:
-  build:
+  createrelease:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
@@ -23,3 +23,18 @@ jobs:
           release_name: ${{ github.ref }}
           draft: false
           prerelease: false
+  build:
+    name: Build and Upload Assets
+    needs: [createrelease]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Run publish script
+        env:
+          GHTOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: cd build && ./publish
