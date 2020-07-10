@@ -228,12 +228,14 @@ static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 	int err = opasockRecv(&CURRCONN, buff, len, &tot);
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
+		if (err == OPA_ERR_EOF) {
+			// peer has performed orderly shutdown
+			// TODO: if a response is outstanding then exit with error code?
+			printf("socket closed\n");
+			exit(EXIT_SUCCESS);
+		}
+		printf("socket closed; err %d\n", err);
 		exit(EXIT_FAILURE);
-	} else if (tot == 0) {
-		// peer has performed orderly shutdown
-		printf("socket closed\n");
-		// TODO: if a response is outstanding then exit with error code?
-		exit(0);
 	}
 	return tot;
 }

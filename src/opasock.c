@@ -95,12 +95,26 @@ int opasockRecv(opasock* s, void* buff, size_t len, size_t* pNumRead) {
 #else
 	ssize_t result = recv(s->sid, buff, len, 0);
 #endif
-	if (result < 0) {
+	if (result <= 0) {
 		if (pNumRead != NULL) {
 			*pNumRead = 0;
 		}
+		if (result == 0) {
+			return OPA_ERR_EOF;
+		}
+#ifdef _WIN32
+		int wsaErr = WSAGetLastError();
+		if (wsaErr == WSAEWOULDBLOCK) {
+			return OPA_ERR_WOULDBLOCK;
+		}
+#else
+		int syserr = errno;
+		if (syserr == EAGAIN || syserr == EWOULDBLOCK) {
+			return OPA_ERR_WOULDBLOCK;
+		}
+#endif
 		OPASOCKLOGERR();
-		// TODO: convert err code
+		// TODO: convert more err codes
 		return OPA_ERR_INTERNAL;
 	}
 	if (pNumRead != NULL) {
@@ -119,8 +133,19 @@ int opasockSend(opasock* s, const void* buff, size_t len, size_t* pNumWritten) {
 		if (pNumWritten != NULL) {
 			*pNumWritten = 0;
 		}
+#ifdef _WIN32
+		int wsaErr = WSAGetLastError();
+		if (wsaErr == WSAEWOULDBLOCK) {
+			return OPA_ERR_WOULDBLOCK;
+		}
+#else
+		int syserr = errno;
+		if (syserr == EAGAIN || syserr == EWOULDBLOCK) {
+			return OPA_ERR_WOULDBLOCK;
+		}
+#endif
 		OPASOCKLOGERR();
-		// TODO: convert err code
+		// TODO: convert more err codes
 		return OPA_ERR_INTERNAL;
 	}
 	if (pNumWritten != NULL) {
