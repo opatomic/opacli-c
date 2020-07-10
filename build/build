@@ -7,7 +7,7 @@
 #   TGTOS          target os (default is from `uname`)
 #   CC             program/command to compile (default cc)
 #   AR             program/command to archive (default ar)
-#   ARFLAGS        flags to pass to AR program (default rcs)
+#   ARFLAGS        flags to pass to AR program (default -rcs)
 
 # requirement to build on ubuntu:
 #   sudo apt-get install build-essential
