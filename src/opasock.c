@@ -42,6 +42,17 @@
 #endif
 
 
+// this is here for compiling with MSVC and targeting older versions of windows
+#ifndef IN6ADDR_LOOPBACK_INIT
+#define IN6ADDR_LOOPBACK_INIT {{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}}}
+static const struct in6_addr in6addr_loopback = IN6ADDR_LOOPBACK_INIT;
+#endif
+
+
+void opasockInit(opasock* s) {
+	s->sid = SOCKID_NONE;
+}
+
 int opasockClose(opasock* s) {
 	if (s->sid != SOCKID_NONE && closesocket(s->sid)) {
 		OPASOCKLOGERR();
@@ -83,6 +94,29 @@ static void opasockConnectInternal(opasock* s, const char* remoteAddr, uint16_t 
 	if (s->sid == SOCKID_NONE) {
 		OPALOGERRF("could not bind address; addr=%s port=%u", remoteAddr, remotePort);
 	}
+}
+
+int opasockIsLoopback(const opasock* s) {
+	struct sockaddr_storage addr;
+	socklen_t addrLen = sizeof(addr);
+	if (getpeername(s->sid, (struct sockaddr*)&addr, &addrLen) == 0) {
+		if (addr.ss_family == AF_INET) {
+			// ipv4
+			uint32_t addr32 = ntohl(((struct sockaddr_in*)&addr)->sin_addr.s_addr);
+			if ((addr32 & 0xFF000000) == 0x7f000000) {
+				return 1;
+			}
+		} else if (addr.ss_family == AF_INET6) {
+			// ipv6
+			if (memcmp(&((struct sockaddr_in6*)&addr)->sin6_addr, &in6addr_loopback, sizeof(struct in6_addr)) == 0) {
+				// TODO: is this right? is loopback more than 1 address for ipv6?
+				return 1;
+			}
+		}
+	} else {
+		OPASOCKLOGERR();
+	}
+	return 0;
 }
 
 void opasockConnect(opasock* s, const char* remoteAddr, uint16_t remotePort) {
