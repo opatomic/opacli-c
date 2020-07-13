@@ -26,7 +26,7 @@ testDeps git jq curl
 
 GHUSER="opatomic"
 GHREPO=$(basename "$(dirname "$PWD")")
-if [[ -z "$GHTOKEN" ]]; then
+if [ -z "$GHTOKEN" ]; then
 	GHTOKENFILE="${GHTOKENFILE:-$HOME/githubtoken}"
 	if [ ! -f "$GHTOKENFILE" ]; then
 		echo "GHTOKEN or GHTOKENFILE must be set properly"
