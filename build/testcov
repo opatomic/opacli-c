@@ -7,7 +7,8 @@ TMPDIR="tmp"
 . "$DEPSDIR/opac-c/build/opabuildutil.sh"
 
 # note: defining OPAC_READLEN to small value will make the client run slow but will help coverage test more lines
-GCCOPTS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2"
+CFLAGS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2 $CFLAGS"
+LDFLAGS="-g -fprofile-arcs -ftest-coverage $LDFLAGS"
 
 ensuredir "$TMPDIR"
 rm -rf "${TMPDIR:?}/"*
@@ -22,7 +23,7 @@ cd "$TMPDIR" || exit 1
 INCS="-I./"
 builddir "./" "./"
 FLIST="$(ls ./*.o | sort)"
-$CC $GCCOPTS $LDFLAGS -o "opacli" $FLIST
+$CC $LDFLAGS -o "opacli" $FLIST
 
 ./opacli --version
 ./opacli --help

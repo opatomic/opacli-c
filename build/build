@@ -45,8 +45,9 @@ OUTDIR="$PWD/out"
 #	exit 1
 #fi
 
-GCCOPTS="-std=c99 -O2 -g"
-#GCCOPTS="$GCCOPTS -fno-strict-aliasing"
+CFLAGS="-std=c99 -O2 -g $CFLAGS"
+LDFLAGS="-g $LDFLAGS"
+#CFLAGS="$(testgccopt -fno-strict-aliasing) $CFLAGS"
 
 
 ensuredir "$OUTDIR"
@@ -110,7 +111,7 @@ buildcfile "../deps/opac-c/build/wrapmemcpy.c" "$TMPDIR"
 echo "linking opacli..."
 cd "$TMPDIR" || exit 1
 FLIST="$(ls ./*.o | sort)"
-$CC $GCCOPTS $LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS
+$CC $LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS
 if [ "$OS" = "Windows_NT" ]; then
 	# running mingw on windows: appends .exe to output filename
 	strip $STRIPALLFLAG -o "$OUTDIR/opacli.exe" "$OUTDIR/opacli-debug.exe"
