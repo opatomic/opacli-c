@@ -25,19 +25,21 @@ builddir "./" "./"
 FLIST="$(ls ./*.o | sort)"
 $CC $LDFLAGS -o "opacli" $FLIST
 
-./opacli --version
-./opacli --help
-./opacli < ../../test/cmds.txt
-./opacli ECHO '"'
-./opacli -h localhost -p 4567 -a nopw -r 3 -i 0.01 ECHO hix3
-printf "hi_from_stdin_x2" | ./opacli -x -r 2 ECHO
-./opacli -a "" ECHO hi
-./opacli -p 0 ECHO shouldnotseethis
-./opacli -p 65536 ECHO shouldnotseethis
-./opacli --nolinenoise --indent " " ECHO [[hi]]
-printf "ECHO hitestquit\nQUIT\nECHO shouldnotseethis\n" | ./opacli
+CLICMD="./opacli"
+
+$CLICMD --version
+$CLICMD --help
+$CLICMD < ../../test/cmds.txt
+$CLICMD ECHO '"'
+$CLICMD -h localhost -p 4567 -a nopw -r 3 -i 0.01 ECHO hix3
+printf "hi_from_stdin_x2" | $CLICMD -x -r 2 ECHO
+$CLICMD -a "" ECHO hi
+$CLICMD -p 0 ECHO shouldnotseethis
+$CLICMD -p 65536 ECHO shouldnotseethis
+$CLICMD --nolinenoise --indent " " ECHO [[hi]]
+printf "ECHO hitestquit\nQUIT\nECHO shouldnotseethis\n" | $CLICMD
 # the following command will test some different utf-8 char ranges. requires bash printf
-printf "ECHO \xc2\x80\xe0\xa0\x80\xe1\x80\x80\xed\x80\x80\xee\x80\x80\xf0\x90\x80\x80\xf1\x80\x80\x80\xf4\x80\x80\x80\n" | ./opacli > /dev/null
+printf "ECHO \xc2\x80\xe0\xa0\x80\xe1\x80\x80\xed\x80\x80\xee\x80\x80\xf0\x90\x80\x80\xf1\x80\x80\x80\xf4\x80\x80\x80\n" | $CLICMD > /dev/null
 
 rm bn_*.o
 rm bn_*.c
