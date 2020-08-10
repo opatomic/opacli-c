@@ -17,8 +17,6 @@
 #include <string.h>
 
 #ifdef _WIN32
-// note: include winsock2.h here to make sure it is included before windows.h
-#include <winsock2.h>
 #include <fcntl.h>
 #include <io.h>
 #define strcasecmp _stricmp
@@ -73,7 +71,11 @@
 #define ERR_AUTHREQ -53
 
 
-opasock CURRCONN = {SOCKID_NONE};
+typedef struct {
+	opasock s;
+	opac client;
+} opacliClient;
+
 
 
 
@@ -208,24 +210,10 @@ static int opaGetLine(FILE* f, opabuff* b) {
 
 #endif
 
-static void opacliConnect(const char* addr, uint16_t port) {
-	if (CURRCONN.sid != SOCKID_NONE) {
-		int err = opasockClose(&CURRCONN);
-		if (err) {
-			OPALOGERRF("err %d trying to close conn", err);
-		}
-	}
-	opasockConnect(&CURRCONN, addr, port);
-	if (CURRCONN.sid == SOCKID_NONE) {
-		// TODO: good log message
-		exit(EXIT_FAILURE);
-	}
-}
-
 static size_t opacliReadCB(opac* c, void* buff, size_t len) {
-	UNUSED(c);
 	size_t tot;
-	int err = opasockRecv(&CURRCONN, buff, len, &tot);
+	opacliClient* cli = list_entry(c, opacliClient, client);
+	int err = opasockRecv(&cli->s, buff, len, &tot);
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
 		if (err == OPA_ERR_EOF) {
@@ -241,23 +229,23 @@ static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 }
 
 static size_t opacliWriteCB(opac* c, const void* buff, size_t len) {
-	UNUSED(c);
 	size_t tot;
-	int err = opasockSend(&CURRCONN, buff, len, &tot);
+	opacliClient* cli = list_entry(c, opacliClient, client);
+	int err = opasockSend(&cli->s, buff, len, &tot);
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
+		printf("socket err in send; err %d\n", err);
 		exit(EXIT_FAILURE);
 	}
 	return tot;
 }
 
 static void opacliClientErrCB(opac* c, int errCode) {
-	UNUSED(c);
-	UNUSED(errCode);
+	opacliClient* cli = list_entry(c, opacliClient, client);
 	if (errCode == OPA_ERR_PARSE) {
 		OPALOGERR("error parsing response from server");
 	}
-	int err = opasockClose(&CURRCONN);
+	int err = opasockClose(&cli->s);
 	if (err) {
 		OPALOGERRF("err %d trying to close conn", err);
 	}
@@ -603,8 +591,11 @@ static int mainInternal(int argc, const char* argv[]) {
 
 	FILE* src = stdin;
 
+	opacliClient clic = {0};
 	const opacFuncs iofuncs = {opacliReadCB, opacliWriteCB, opacliClientErrCB, NULL, NULL, NULL, NULL};
 
+	opasockInit(&clic.s);
+	opacInit(&clic.client, &iofuncs);
 
 	// TODO: features to add:
 	//  option for connect timeout
@@ -615,6 +606,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	//  strict parsing mode (must quote strings)? json input/output mode?
 	//  allow strings to be single quoted?
 
+	int err = 0;
 	const char* binName = argc > 0 ? argv[0] : "";
 	const char* host = DEFAULT_HOST;
 	const char* authPass = NULL;
@@ -674,23 +666,27 @@ static int mainInternal(int argc, const char* argv[]) {
 		}
 	}
 
-	opac c;
-	opacInit(&c, &iofuncs);
-	opacliConnect(host, port);
+	if (!err) {
+		// TODO: this function should return err code
+		opasockConnect(&clic.s, host, port);
+		if (clic.s.sid == SOCKID_NONE) {
+			OPALOGERRF("unable to connect; addr=%s port=%u", host, port);
+			exit(EXIT_FAILURE);
+		}
+	}
 
 	// detect whether AUTH is required
-	if (!authPrompt && istty && authPass == NULL && usercmdIdx == 0 && opacIsAuthNeeded(&c)) {
+	if (!authPrompt && istty && authPass == NULL && usercmdIdx == 0 && opacIsAuthNeeded(&clic.client)) {
 		authPrompt = 1;
 	}
 
-	opacliDoAuth(&c, authPass, authPrompt);
+	opacliDoAuth(&clic.client, authPass, authPrompt);
 
 	if (useLinenoise && usercmdIdx > 0) {
 		useLinenoise = 0;
 	}
 	opabuff lineb = {0};
 	char* line = NULL;
-	int err = 0;
 
 	if (usercmdIdx > 0) {
 		for (int i = usercmdIdx; !err && i < argc; ++i) {
@@ -778,11 +774,11 @@ static int mainInternal(int argc, const char* argv[]) {
 		opacReq req;
 		opacReqInit(&req);
 		opacReqSetRequestBuff(&req, ureq.buff);
-		opacQueueSendRecv(&c, &req);
+		opacQueueSendRecv(&clic.client, &req);
 		printResult(&req, indent);
 		opacReqFreeResponse(&req);
 
-		if (!opacIsOpen(&c)) {
+		if (!opacIsOpen(&clic.client)) {
 			break;
 		}
 
@@ -805,8 +801,8 @@ static int mainInternal(int argc, const char* argv[]) {
 
 	opabuffFree(&lineb);
 
-	opasockClose(&CURRCONN);
-	opacClose(&c);
+	opasockClose(&clic.s);
+	opacClose(&clic.client);
 
 #if defined(OPADBG) && defined(OPAMALLOC)
 	const opamallocStats* mstats = opamallocGetStats();
