@@ -234,7 +234,7 @@ static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 			printf("socket closed\n");
 			exit(EXIT_SUCCESS);
 		}
-		printf("socket closed; err %d\n", err);
+		printf("socket err in recv; err %d\n", err);
 		exit(EXIT_FAILURE);
 	}
 	return tot;
