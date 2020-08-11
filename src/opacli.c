@@ -129,6 +129,14 @@ static int opaGetLine2(FILE* f, opabuff* b) {
 }
 
 #ifdef _WIN32
+static void opacliWsaStartup(void) {
+	WSADATA wsd;
+	int wsaerr = WSAStartup(MAKEWORD(2, 2), &wsd);
+	if (wsaerr) {
+		LOGWINERRCODE(wsaerr);
+		exit(EXIT_FAILURE);
+	}
+}
 
 static void usleep(unsigned long usec) {
 	LARGE_INTEGER li;
@@ -250,17 +258,6 @@ static void opacliClientErrCB(opac* c, int errCode) {
 		OPALOGERRF("err %d trying to close conn", err);
 	}
 }
-
-#ifdef _WIN32
-static void opacliWsaStartup(void) {
-	WSADATA wsd;
-	int wsaerr = WSAStartup(MAKEWORD(2, 2), &wsd);
-	if (wsaerr) {
-		LOGWINERRCODE(wsaerr);
-		exit(EXIT_FAILURE);
-	}
-}
-#endif
 
 #if !USELINENOISE
 static char* linenoise(const char* prompt) {
