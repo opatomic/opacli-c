@@ -3,7 +3,7 @@
  * Open sourced with ISC license. Refer to LICENSE for details.
  */
 
-#ifndef _WIN32
+#ifdef __linux__
 // usleep
 #define _BSD_SOURCE
 #define _DEFAULT_SOURCE
