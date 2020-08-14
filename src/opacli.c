@@ -601,7 +601,6 @@ static int mainInternal(int argc, const char* argv[]) {
 	//  auto reconnect if conn is closed?
 	//  detect socket close when it happens rather than when sending next request
 	//  strict parsing mode (must quote strings)? json input/output mode?
-	//  allow strings to be single quoted?
 
 	int err = 0;
 	const char* binName = argc > 0 ? argv[0] : "";
