@@ -83,8 +83,10 @@ set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0500 -DWINVER=0x0500 -DOPA_NOTHR
 set INCS="-I%LIBTOMDIR%"
 
 call :BuildDir ..\deps\opac-c\src\*.c %TMPDIR%
-set INCS=%INCS% "-I..\deps\opac-c\src"
+set INCS=%INCS% "-I%cd%\..\deps\opac-c\src"
+set INCS=%INCS% "-I%SRCDIR%"
 call :BuildDir ..\src\*.c %TMPDIR%
+call :BuildDir ..\src\opatls\*.c %TMPDIR%
 
 call :GetFLIST %TMPDIR%\*.obj
 cl -nologo /MD "-Fe%OUTDIR%\opacli.exe" %FLIST% "%TMPDIR%\tommath.lib" ws2_32.lib advapi32.lib

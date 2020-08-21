@@ -13,6 +13,9 @@
 #ifdef _WIN32
 #define fopen winfopen
 #define strcasecmp _stricmp
+#define fseeko _fseeki64
+#define ftello _ftelli64
+#define off_t __int64
 #else
 #include <strings.h>
 #endif
@@ -42,8 +45,8 @@
 // read a file into a null terminated string buffer
 int tlsutilsReadFile(const char* path, uint8_t** pBuff, size_t* pLen) {
 	uint8_t* buff = NULL;
-	long len = 0;
-	long totRead = 0;
+	off_t len = 0;
+	off_t totRead = 0;
 	FILE* f = fopen(path, "rb");
 	if (f == NULL) {
 		goto err;
