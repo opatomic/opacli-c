@@ -17,6 +17,11 @@
 #include <strings.h>
 #endif
 
+#ifdef __APPLE__
+#include <Security/SecureTransport.h>
+#include <Security/Security.h>
+#endif
+
 #include "base64.h"
 #include "opacore.h"
 #ifdef OPA_MBEDTLS
