@@ -1,13 +1,21 @@
 #!/bin/bash
 
 
+SRCDIR="$PWD/../src"
 DEPSDIR="../deps"
 TMPDIR="tmp"
 
 . "$DEPSDIR/opac-c/build/opabuildutil.sh"
 
+DEPDIR="$PWD/dep"
+MBEDTLS_DIR="$DEPDIR/mbedtls"
+MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.16}"
+MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
+. ./build-opatls.sh
+
+
 # note: defining OPAC_READLEN to small value will make the client run slow but will help coverage test more lines
-CFLAGS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2 $CFLAGS"
+CFLAGS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2 -DOPA_MBEDTLS $CFLAGS"
 LDFLAGS="-g -fprofile-arcs -ftest-coverage $LDFLAGS"
 
 ensuredir "$TMPDIR"
@@ -17,15 +25,20 @@ cp "$DEPSDIR/opac-c/src/"* "$TMPDIR"
 cp "$DEPSDIR/libtommath/"*.c "$TMPDIR"
 cp "$DEPSDIR/libtommath/"*.h "$TMPDIR"
 cp "../src/"* "$TMPDIR"
+cp "../src/opatls/"*.c "$TMPDIR"
+
+opatlsSetVars
+buildmbedtls
 
 ORIGDIR=$(pwd)
 cd "$TMPDIR" || exit 1
-INCS="-I./"
+INCS="-I./ -I$SRCDIR/ -I$MBEDTLS_DIR/include"
 builddir "./" "./"
 FLIST="$(ls ./*.o | sort)"
+FLIST="$FLIST $OPATLS_LNLIBS"
 $CC $LDFLAGS -o "opacli" $FLIST
 
-CLICMD="./opacli"
+CLICMD="./opacli --tls-always --no-verify-peer"
 
 $CLICMD --version
 $CLICMD --help

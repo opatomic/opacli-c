@@ -42,6 +42,10 @@
 #endif
 #endif
 
+#ifdef OPA_MBEDTLS
+#include "mbedtls/version.h"
+#endif
+
 #if USELINENOISE
 #include "linenoise.h"
 #endif
@@ -59,6 +63,15 @@
 #include "licenses.h"
 #include "winutils.h"
 
+#ifdef OPA_OPENSSL
+#include "opatls/openssl.h"
+#endif
+#ifdef OPA_MBEDTLS
+#include "opatls/mbed.h"
+#endif
+#include "opatls/opatls.h"
+#include "opatls/tlsutils.h"
+
 
 #ifndef OPACLI_VERSION
 #define OPACLI_VERSION "0.0.0-dev"
@@ -73,6 +86,8 @@
 
 typedef struct {
 	opasock s;
+	char useTls;
+	opatlsState tls;
 	opac client;
 } opacliClient;
 
@@ -100,6 +115,12 @@ static void printUsage(const char* bin, int exitCode) {
 			" -x              read last argument from STDIN\n"
 			" --indent <str>  indent when printing multiline response (default 4 spaces)\n"
 			" --authp         prompt for AUTH password\n"
+			" --sni <host>    server name expected when using TLS\n"
+			" --cacert <file> file containing trusted CA certs for TLS\n"
+			" --cert <file>   client's certificate for TLS (PEM format)\n"
+			" --key <file>    client's private key for TLS (PEM format)\n"
+			" --no-tls        disable TLS\n"
+			" --tls-always    always use TLS (even for localhost)\n"
 			" --help          print this help and exit\n"
 			" --version       print version and exit\n"
 			" --licenses      print the licenses of included software\n"
@@ -220,8 +241,13 @@ static int opaGetLine(FILE* f, opabuff* b) {
 
 static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 	size_t tot;
+	int err = 0;
 	opacliClient* cli = list_entry(c, opacliClient, client);
-	int err = opasockRecv(&cli->s, buff, len, &tot);
+	if (cli->useTls) {
+		err = opatlsStateRead(&cli->tls, buff, len, &tot);
+	} else {
+		err = opasockRecv(&cli->s, buff, len, &tot);
+	}
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
 		if (err == OPA_ERR_EOF) {
@@ -238,8 +264,13 @@ static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 
 static size_t opacliWriteCB(opac* c, const void* buff, size_t len) {
 	size_t tot;
+	int err = 0;
 	opacliClient* cli = list_entry(c, opacliClient, client);
-	int err = opasockSend(&cli->s, buff, len, &tot);
+	if (cli->useTls) {
+		err = opatlsStateWrite(&cli->tls, buff, len, &tot);
+	} else {
+		err = opasockSend(&cli->s, buff, len, &tot);
+	}
 	if (err) {
 		// TODO: close client and detect closed client from loop; allow reconnect?
 		printf("socket err in send; err %d\n", err);
@@ -258,6 +289,18 @@ static void opacliClientErrCB(opac* c, int errCode) {
 		OPALOGERRF("err %d trying to close conn", err);
 	}
 }
+
+static int tlssockReadCB(void* cbdata, void* buff, size_t numToRead, size_t* pNumRead) {
+	opacliClient* c = (opacliClient*) cbdata;
+	return opasockRecv(&c->s, buff, numToRead, pNumRead);
+}
+
+static int tlssockWriteCB(void* cbdata, const void* buff, size_t numToWrite, size_t* pNumWritten) {
+	opacliClient* c = (opacliClient*) cbdata;
+	return opasockSend(&c->s, buff, numToWrite, pNumWritten);
+}
+
+const opatlsioStreamCBs STREAMCBS = {tlssockReadCB, tlssockWriteCB};
 
 #if !USELINENOISE
 static char* linenoise(const char* prompt) {
@@ -616,6 +659,16 @@ static int mainInternal(int argc, const char* argv[]) {
 	char useLinenoise = USELINENOISE && istty && isatty(STDOUT_FILENO);
 	long interval = 0;
 	long long repeat = 1;
+	char useTLS = 2;
+	const opatlsLib* tlsLib2 = tlsutilsGetDefaultLib();
+	char verifyPeer = 1;
+	const char* sni = NULL;
+	const char* cacert = NULL;
+	const char* cert = NULL;
+	const char* key = NULL;
+	const char* certP12 = NULL;
+	const char* certPass = NULL;
+	opatlsConfig tlscfg;
 
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
@@ -636,19 +689,59 @@ static int mainInternal(int argc, const char* argv[]) {
 			useLinenoise = 0;
 		} else if (strcmp(argv[i], "--indent") == 0 && i + 1 < argc) {
 			indent = argv[++i];
+		} else if (strcmp(argv[i], "--sni") == 0 && i + 1 < argc) {
+			sni = argv[++i];
+		} else if (strcmp(argv[i], "--cacert") == 0 && i + 1 < argc) {
+			cacert = argv[++i];
+		} else if (strcmp(argv[i], "--cert") == 0 && i + 1 < argc) {
+			cert = argv[++i];
+		} else if (strcmp(argv[i], "--key") == 0 && i + 1 < argc) {
+			key = argv[++i];
+		} else if (strcmp(argv[i], "--cert-p12") == 0 && i + 1 < argc) {
+			certP12 = argv[++i];
+		} else if (strcmp(argv[i], "--cert-pass") == 0 && i + 1 < argc) {
+			certPass = argv[++i];
+		} else if (strcmp(argv[i], "--no-verify-peer") == 0) {
+			verifyPeer = 0;
+		} else if (strcmp(argv[i], "--no-tls") == 0) {
+			useTLS = 0;
+		} else if (strcmp(argv[i], "--tls-always") == 0) {
+			useTLS = 3;
+		} else if (strcmp(argv[i], "--tls-lib") == 0 && i + 1 < argc) {
+			tlsLib2 = tlsutilsGetLib(argv[i + 1]);
+			if (tlsLib2 == NULL) {
+				fprintf(stderr, "unsupported tls library \"%s\"\n", argv[i + 1]);
+				exit(EXIT_FAILURE);
+			}
+			++i;
 		} else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0) {
 			printUsage(binName, EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "--version") == 0) {
 			const opacBuildInfo* ocbi = opacGetBuildInfo();
 			printf("opacli %s (opac %s; %s; %s)\n", OPACLI_VERSION, ocbi->version, ocbi->threadSupport ? "threads" : "no-threads", ocbi->bigIntLib);
+#ifdef OPA_OPENSSL
+			const char* vstr = opensslGetVersionStr();
+			if (vstr != NULL) {
+				printf("%s\n", vstr);
+			}
+#endif
+#ifdef OPA_MBEDTLS
+			{
+				char tmp[32];
+				mbedtls_version_get_string_full(tmp);
+				printf("%s\n", tmp);
+			}
+#endif
 			exit(EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "--licenses") == 0) {
-			const char* licenses[] = {opatomicLicense, libtomLicense, linenoiseLicense, libdlbLicense};
+			const char* sep = "-------------------------------------------------------------------------\n";
 			printf("Depending on how it is configured, this project may include source code from any of the following:\n\n");
+			const char* licenses[] = {
+#ifdef OPA_MBEDTLS
+				mbedtlsLicense1, mbedtlsLicense2, mbedtlsLicense3, sep,
+#endif
+				linenoiseLicense, sep, libtomLicense, sep, libdlbLicense, sep, opatomicLicense};
 			for (size_t j = 0; j < sizeof(licenses) / sizeof(licenses[0]); ++j) {
-				if (j != 0) {
-					printf("-------------------------------------------------------------------------\n");
-				}
 				printf("%s\n", licenses[j]);
 			}
 			exit(EXIT_SUCCESS);
@@ -662,6 +755,42 @@ static int mainInternal(int argc, const char* argv[]) {
 		}
 	}
 
+	if (useTLS && tlsLib2 == NULL) {
+		fprintf(stderr, "unsupported tls library\n");
+		exit(EXIT_FAILURE);
+	}
+
+	opatlsConfigInit(&tlscfg);
+	opatlsStateInit(&clic.tls);
+	if (useTLS && !err) {
+		clic.useTls = 1;
+		if (!err) {
+			err = opatlsConfigSetup(&tlscfg, tlsLib2, NULL, 0);
+		}
+		if (!err) {
+			err = opatlsConfigVerifyPeer(&tlscfg, verifyPeer);
+		}
+#ifdef OPA_MBEDTLS
+		if (!err && tlsLib2 == &mbedLib && cacert == NULL) {
+			cacert = mbedGetDefaultCAPath();
+		}
+#endif
+		if (!err && cacert != NULL) {
+			err = opatlsConfigAddCACertsFile(&tlscfg, cacert);
+		}
+		if (!err && (cert != NULL && key != NULL)) {
+			err = opatlsConfigUseCert(&tlscfg, cert, key);
+		}
+		if (!err && certP12 != NULL) {
+			err = opatlsConfigUseCertP12(&tlscfg, certP12, certPass);
+		}
+	}
+
+	if (err) {
+		OPALOGERRF("err %d occurred", err);
+		exit(EXIT_FAILURE);
+	}
+
 	if (!err) {
 		// TODO: this function should return err code
 		opasockConnect(&clic.s, host, port);
@@ -669,6 +798,44 @@ static int mainInternal(int argc, const char* argv[]) {
 			OPALOGERRF("unable to connect; addr=%s port=%u", host, port);
 			exit(EXIT_FAILURE);
 		}
+	}
+
+	if (!err && useTLS == 2 && opasockIsLoopback(&clic.s)) {
+		// if connecting to loopback address then don't use TLS. This helps development by avoiding
+		//  cert generation/verification issues when not connecting to different machine over
+		//  network. Note that there may be potential security issues if this machine is being
+		//  used by multiple (untrusted) people/apps at once.
+		useTLS = 0;
+		// TODO: clear tls initializations
+		tlsLib2 = NULL;
+		clic.useTls = 0;
+		if (istty) {
+			printf("Connection to localhost detected. TLS encryption disabled. Use --tls-always if encryption is desired.\n");
+		}
+	}
+
+	if (useTLS && !err) {
+		if (!err) {
+			err = opatlsConfigSetupNewState(&tlscfg, &clic.tls, NULL);
+		}
+		if (!err) {
+			opatlsStateSetCallbackData(&clic.tls, &clic, &STREAMCBS);
+		}
+		if (!err) {
+			err = opatlsStateSetExpectedHost(&clic.tls, sni != NULL ? sni : host);
+		}
+		if (!err) {
+			err = opatlsStateHandshake(&clic.tls);
+			if (err) {
+				OPALOGERR("TLS handshake failed");
+			}
+		}
+	}
+
+	if (err) {
+		//opasockClose(s);
+		OPALOGERRF("err %d occurred", err);
+		exit(EXIT_FAILURE);
 	}
 
 	// detect whether AUTH is required
@@ -797,10 +964,18 @@ static int mainInternal(int argc, const char* argv[]) {
 
 	opabuffFree(&lineb);
 
+	if (opatlsStateHandshakeCompleted(&clic.tls)) {
+		opatlsStateNotifyPeerClosing(&clic.tls);
+	}
+	opatlsStateClear(&clic.tls);
+	opatlsConfigClear(&tlscfg);
 	opasockClose(&clic.s);
 	opacClose(&clic.client);
 
 #if defined(OPADBG) && defined(OPAMALLOC)
+#ifdef OPA_OPENSSL
+	opensslCloseLib();
+#endif
 	const opamallocStats* mstats = opamallocGetStats();
 	if (mstats->allocs > 0) {
 		printf("memory leak? allocs: %lu\n", mstats->allocs);

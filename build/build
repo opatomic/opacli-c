@@ -10,7 +10,7 @@
 #   ARFLAGS        flags to pass to AR program (default -rcs)
 
 # requirement to build on ubuntu:
-#   sudo apt-get install build-essential
+#   sudo apt-get install build-essential git
 
 # to build for win64 on ubuntu:
 #   sudo apt-get install mingw-w64
@@ -37,6 +37,11 @@
 SRCDIR="$PWD/../src"
 TMPDIR="$PWD/tmp"
 OUTDIR="$PWD/out"
+DEPDIR="$PWD/dep"
+
+MBEDTLS_DIR="$DEPDIR/mbedtls"
+MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.16}"
+MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
 
 . "../deps/opac-c/build/opabuildutil.sh"
 
@@ -52,6 +57,7 @@ LDFLAGS="-g $LDFLAGS"
 
 ensuredir "$OUTDIR"
 ensuredir "$TMPDIR"
+ensuredir "$DEPDIR"
 rm -rf "${TMPDIR:?}/"*
 
 
@@ -78,6 +84,10 @@ if [ "$TGTOS" != "win" ]; then
 	CFLAGS="$ORIGCF"
 fi
 
+. ./build-opatls.sh
+opatlsSetVars
+buildmbedtls
+
 
 DEFS="-DOPA_NOTHREADS"
 
@@ -101,9 +111,13 @@ OPACVER=$(cat ../deps/opac-c/build/version.txt) || exit 1
 DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
 builddir "../deps/opac-c/src" "$TMPDIR"
 
-INCS="-I../deps/opac-c/src -I../deps/linenoise"
-DEFS="$DEFS -DOPACLI_VERSION=\"$(./verget)\""
+INCS="-I$PWD/../deps/opac-c/src -I$PWD/../deps/linenoise -I$SRCDIR/"
+if [ "$OPA_MBEDTLS" = "1" ]; then
+	INCS="$INCS -I$MBEDTLS_DIR/include"
+fi
+DEFS="$DEFS $OPATLS_DEFS -DOPACLI_VERSION=\"$(./verget)\""
 builddir "$SRCDIR" "$TMPDIR"
+builddir "$SRCDIR/opatls" "$TMPDIR"
 
 CFLAGS="$CFLAGS $(testgccopt -fno-lto)"
 buildcfile "../deps/opac-c/build/wrapmemcpy.c" "$TMPDIR"
@@ -111,7 +125,7 @@ buildcfile "../deps/opac-c/build/wrapmemcpy.c" "$TMPDIR"
 echo "linking opacli..."
 cd "$TMPDIR" || exit 1
 FLIST="$(ls ./*.o | sort)"
-$CC $LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS
+$CC $LDFLAGS $OPATLS_LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS $OPATLS_LNLIBS
 if [ "$OS" = "Windows_NT" ]; then
 	# running mingw on windows: appends .exe to output filename
 	strip $STRIPALLFLAG -o "$OUTDIR/opacli.exe" "$OUTDIR/opacli-debug.exe"
