@@ -51,6 +51,7 @@ MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
 #fi
 
 CFLAGS="-std=c99 -O2 -g $CFLAGS"
+CFLAGS="-D_FILE_OFFSET_BITS=64 $CFLAGS"
 LDFLAGS="-g $LDFLAGS"
 #CFLAGS="$(testgccopt -fno-strict-aliasing) $CFLAGS"
 
