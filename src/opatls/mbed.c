@@ -24,6 +24,7 @@
 
 #include "mbedtls/error.h"
 #include "mbedtls/net_sockets.h"
+#include "mbedtls/platform.h"
 
 #include "opacore.h"
 #include "opatls/mbed.h"
@@ -207,6 +208,12 @@ const char* mbedGetDefaultCAPath(void) {
 }
 
 int mbedCfgInit(mbedCfg* cfg, int isServer) {
+	static int INIT = 0;
+	if (!INIT) {
+		mbedtls_platform_set_calloc_free(OPACALLOC, OPAFREE);
+		INIT = 1;
+	}
+
 	mbedtls_ssl_config_init(&cfg->cfg);
 	mbedtls_ctr_drbg_init(&cfg->ctr_drbg);
 	mbedtls_entropy_init(&cfg->entropy);

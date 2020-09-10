@@ -13,6 +13,9 @@
 // windows
 #define MBEDTLS_PLATFORM_C
 
+// custom memory allocation: mbedtls_platform_set_calloc_free
+#define MBEDTLS_PLATFORM_MEMORY
+
 #define MBEDTLS_VERSION_C
 #define MBEDTLS_ERROR_C
 #define MBEDTLS_AESNI_C
