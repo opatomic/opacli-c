@@ -45,6 +45,9 @@
 #ifdef OPA_MBEDTLS
 #include "mbedtls/version.h"
 #endif
+#if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
+#include "mbedtls/platform.h"
+#endif
 
 #if USELINENOISE
 #include "linenoise.h"
@@ -628,6 +631,9 @@ static int mainInternal(int argc, const char* argv[]) {
 	#ifdef _WIN32
 		opacliWsaStartup();
 	#endif
+	#if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
+		mbedtls_platform_set_calloc_free(OPACALLOC, OPAFREE);
+	#endif
 
 	FILE* src = stdin;
 
@@ -737,7 +743,7 @@ static int mainInternal(int argc, const char* argv[]) {
 			const char* sep = "-------------------------------------------------------------------------\n";
 			printf("Depending on how it is configured, this project may include source code from any of the following:\n\n");
 			const char* licenses[] = {
-#ifdef OPA_MBEDTLS
+#if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
 				mbedtlsLicense1, mbedtlsLicense2, mbedtlsLicense3, sep,
 #endif
 				linenoiseLicense, sep, libtomLicense, sep, libdlbLicense, sep, opatomicLicense};

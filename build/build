@@ -133,7 +133,7 @@ DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
 builddir "../deps/opac-c/src" "$TMPDIR"
 
 INCS="-I$PWD/../deps/opac-c/src -I$PWD/../deps/linenoise -I$SRCDIR/"
-if [ "$OPA_MBEDTLS" = "1" ]; then
+if [ "$OPA_MBEDTLS" != "0" ] || [ "$OPABIGINT_LIB" = "mbedtls" ]; then
 	INCS="$INCS -I$MBEDTLS_DIR/include"
 fi
 DEFS="$DEFS $OPATLS_DEFS -DOPACLI_VERSION=\"$(./verget)\""

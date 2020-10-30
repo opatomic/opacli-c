@@ -92,7 +92,7 @@ const char* libdlbLicense =
 "OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n";
 
 
-#ifdef OPA_MBEDTLS
+#if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
 
 const char* mbedtlsLicense1 =
 "mbedtls\n"
