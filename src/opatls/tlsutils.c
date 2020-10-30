@@ -84,7 +84,7 @@ int tlsutilsReadFile(const char* path, uint8_t** pBuff, size_t* pLen) {
 	if (f != NULL) {
 		fclose(f);
 	}
-	opazeroAndFree(buff, len);
+	opaZeroAndFree(buff, len);
 	return OPA_ERR_INTERNAL;
 }
 
@@ -139,7 +139,7 @@ int tlsutilsIterateCerts(const char* file, void* ctx, tlsutilsNextCertCB cbfunc)
 	if (!err) {
 		err = tlsutilsParseCerts((char*) buff, ctx, cbfunc);
 	}
-	opazeroAndFree(buff, buffLen);
+	opaZeroAndFree(buff, buffLen);
 	return err;
 }
 
@@ -185,7 +185,7 @@ int tlsutilsLoadPsk(const char* filename, opatlsPsk** ppPsk) {
 	} else {
 		*ppPsk = psk;
 	}
-	opazeroAndFree(buff, buffLen);
+	opaZeroAndFree(buff, buffLen);
 	return err;
 }
 

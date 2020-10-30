@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # variables that can be set:
-#   OPA_USEGMP=1   use GMP rather than libtommath
+#   OPABIGINT_LIB  use different bigint library
 #   CFLAGS         extra args to pass to compiler during compile stage
 #   LDFLAGS        extra args to pass to linker during link stage
 #   TGTOS          target os (default is from `uname`)
@@ -20,7 +20,7 @@
 #   CC=i686-w64-mingw32-gcc AR=i686-w64-mingw32-ar TGTOS=win ./build
 # to use GMP rather than libtommath:
 #   sudo apt-get install libgmp3-dev
-#   OPA_USEGMP=1 ./build
+#   OPABIGINT_LIB=GMP ./build
 # to target 32-bit from 64-bit ubuntu:
 #   sudo apt-get install gcc-multilib
 #   CFLAGS="-march=i386 -m32" LDFLAGS="-march=i386 -m32" ./build
@@ -39,6 +39,7 @@ TMPDIR="$PWD/tmp"
 OUTDIR="$PWD/out"
 DEPDIR="$PWD/dep"
 
+OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
 MBEDTLS_DIR="$DEPDIR/mbedtls"
 MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.16}"
 MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
@@ -55,6 +56,24 @@ CFLAGS="-D_FILE_OFFSET_BITS=64 $CFLAGS"
 LDFLAGS="-g $LDFLAGS"
 #CFLAGS="$(testgccopt -fno-strict-aliasing) $CFLAGS"
 
+if [ "$OPABIGINT_LIB" = "mbedtls" ]; then
+	CFLAGS="-DOPABIGINT_USE_MBED $CFLAGS"
+	if [ "$OPA_MBEDTLS" = "0" ]; then
+		LNLIBS="$LNLIBS $MBEDTLS_DIR/library/libmbedcrypto.a"
+	fi
+elif [ "$OPABIGINT_LIB" = "LTM" ]; then
+	CFLAGS="-DOPABIGINT_USE_LTM $CFLAGS"
+	LNLIBS="$LNLIBS libtommath.a"
+elif [ "$OPABIGINT_LIB" = "GMP" ]; then
+	echo "linking with GMP"
+	CFLAGS="-DOPABIGINT_USE_GMP $CFLAGS"
+	LNLIBS="$LNLIBS -lgmp"
+elif [ "$OPABIGINT_LIB" = "openssl" ]; then
+	CFLAGS="-DOPABIGINT_USE_OPENSSL $CFLAGS"
+else
+	echo "unknown bigint lib \$OPABIGINT_LIB=$OPABIGINT_LIB"
+	exit 1
+fi
 
 ensuredir "$OUTDIR"
 ensuredir "$TMPDIR"
@@ -67,7 +86,7 @@ if [ "$OS" = "Windows_NT" ]; then
 	CFLAGS="$(testgccopt -fno-ident) $CFLAGS"
 fi
 
-if [ "$OPA_USEGMP" != "1" ]; then
+if [ "$OPABIGINT_LIB" = "LTM" ]; then
 	INCS="-I."
 	builddir "../deps/libtommath" "$TMPDIR"
 	$AR $ARFLAGS "$TMPDIR/libtommath.a" "$TMPDIR"/*.o
@@ -87,18 +106,13 @@ fi
 
 . ./build-opatls.sh
 opatlsSetVars
-buildmbedtls
+if [ "$OPA_MBEDTLS" != "0" ] || [ "$OPABIGINT_LIB" = "mbedtls" ]; then
+	buildmbedtls
+fi
 
 
 DEFS="-DOPA_NOTHREADS"
 
-if [ "$OPA_USEGMP" = "1" ]; then
-	DEFS="$DEFS -DOPA_USEGMP"
-	echo "linking with GMP"
-	LNLIBS="$LNLIBS -lgmp"
-else
-	LNLIBS="$LNLIBS libtommath.a"
-fi
 
 if [ "$TGTOS" = "win" ]; then
 	DEFS="$DEFS -DWIN32_LEAN_AND_MEAN -D__USE_MINGW_ANSI_STDIO"
@@ -107,7 +121,13 @@ if [ "$TGTOS" = "win" ]; then
 	LDFLAGS="-municode $LDFLAGS"
 fi
 
-INCS="-I./ -I../deps/libtommath"
+INCS="-I./"
+if [ "$OPABIGINT_LIB" = "mbedtls" ]; then
+	INCS="$INCS -I$MBEDTLS_DIR/include"
+elif [ "$OPABIGINT_LIB" = "LTM" ]; then
+	INCS="$INCS -I../deps/libtommath"
+fi
+
 OPACVER=$(cat ../deps/opac-c/build/version.txt) || exit 1
 DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
 builddir "../deps/opac-c/src" "$TMPDIR"

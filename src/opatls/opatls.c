@@ -43,7 +43,7 @@ size_t opatlsPskIdLen(const opatlsPsk* psk) {
 
 void opatlsPskFree(opatlsPsk* psk) {
 	if (psk != NULL) {
-		opazeroAndFree(psk, sizeof(opatlsPsk) + psk->idLen + psk->keyLen);
+		opaZeroAndFree(psk, sizeof(opatlsPsk) + psk->idLen + psk->keyLen);
 	}
 }
 

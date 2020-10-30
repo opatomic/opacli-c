@@ -196,6 +196,8 @@ static int opappFindEndInternal(opapp* rc, const uint8_t* buff, size_t len, cons
 			case OPADEF_NULL:
 			case OPADEF_FALSE:
 			case OPADEF_TRUE:
+			case OPADEF_NEGINF:
+			case OPADEF_POSINF:
 			case OPADEF_ZERO:
 			case OPADEF_BIN_EMPTY:
 			case OPADEF_STR_EMPTY:
@@ -338,7 +340,7 @@ static int opappFindEndInternal(opapp* rc, const uint8_t* buff, size_t len, cons
 	}
 
 	ParseVarDec: {
-		if (rc->varintVal > opt->maxVarDecExp) {
+		if (rc->varintVal > opt->maxDecExp) {
 			// exponent is too big
 			goto ReturnParseErr;
 		}
@@ -347,7 +349,7 @@ static int opappFindEndInternal(opapp* rc, const uint8_t* buff, size_t len, cons
 	}
 
 	ParseBigDec: {
-		if (rc->varintVal > opt->maxVarDecExp) {
+		if (rc->varintVal > opt->maxDecExp) {
 			// exponent is too big
 			goto ReturnParseErr;
 		}
@@ -370,7 +372,7 @@ static const opappOptions OPAPP_DEFOPT = {
 	.maxArrayDepth = UINT_MAX,
 	.checkUtf8 = 1,
 	.maxBigIntLen = SIZE_MAX,
-	.maxVarDecExp = INT32_MAX,
+	.maxDecExp = INT32_MAX,
 	//.maxBinLen = SIZE_MAX,
 	//.maxStrLen = SIZE_MAX
 };

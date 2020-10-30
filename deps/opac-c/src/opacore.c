@@ -203,7 +203,7 @@ size_t opaviGetStoredLen(const uint8_t* buff) {
 }
 */
 
-void opazeroAndFree(void* ptr, size_t len) {
+void opaZeroAndFree(void* ptr, size_t len) {
 	if (ptr != NULL) {
 		opaszmem(ptr, len);
 		OPAFREE(ptr);
@@ -313,12 +313,48 @@ int opaIsNumStr(const char* s, const char* end) {
 	return 1;
 }
 
+static char tolowerascii(char ch) {
+	return ch <= 'Z' && ch >= 'A' ? 'a' + (ch - 'A') : ch;
+}
+
+static int isinfstrInternal(const char* b, size_t len) {
+	static const char* a = "infinity";
+	OASSERT(len > 0 && len <= strlen(a));
+	for (; len > 0; --len, ++a, ++b) {
+		if (*a != tolowerascii(*b)) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+int opaIsInfStr(const char* str, size_t len) {
+	switch (len) {
+		case 9:
+		case 4:
+			if (str[0] == '-' && isinfstrInternal(str + 1, len - 1)) {
+				return -1;
+			} else if (str[0] == '+' && isinfstrInternal(str + 1, len - 1)) {
+				return 1;
+			}
+			break;
+		case 8:
+		case 3:
+			if (isinfstrInternal(str, len)) {
+				return 1;
+			}
+			break;
+	}
+	return 0;
+}
+
 const uint8_t* opaFindInvalidUtf8(const uint8_t* s, size_t len) {
 	const uint8_t* end = s + len;
 
 	// TODO: look into other techniques to speed this up
 	//  https://github.com/lemire/fastvalidate-utf-8
 	//  https://github.com/cyb70289/utf8/
+	//  https://lemire.me/blog/2020/10/20/ridiculously-fast-unicode-utf-8-validation/
 
 	/*
 	#ifdef __SSE2__

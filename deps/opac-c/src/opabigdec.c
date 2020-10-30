@@ -20,100 +20,99 @@
 #define OPABIGDEC_MAXSTRZS 6
 #endif
 
+#define OPABIGDEC_NEGINF -1
+#define OPABIGDEC_POSINF 1
 
-int opabigdecConvertErr(mp_err tomerr) {
-	switch (tomerr) {
-		case MP_OKAY: return 0;
-		case MP_MEM:  return OPA_ERR_NOMEM;
-		case MP_BUF:
-		case MP_VAL:  return OPA_ERR_INVARG;
-		default:
-			OPALOGERRF("unknown libtom err %d", tomerr);
-			return OPA_ERR_INTERNAL;
-	}
-}
 
-int opabigdecInit(opabigdec* a) {
-	int err = mp_init(&a->significand);
-	if (!err) {
-		a->exponent = 0;
-	} else {
-		err = opabigdecConvertErr(err);
-	}
-	return err;
+void opabigdecInit(opabigdec* a) {
+	memset(a, 0, sizeof(opabigdec));
+	opabigintInit(&a->significand);
+	a->exponent = 0;
+	a->inf = 0;
 }
 
 int opabigdecInitCopy(const opabigdec* src, opabigdec* dst) {
 	OASSERT(src != dst);
-	int err = mp_init_copy(&dst->significand, &src->significand);
+	int err = opabigintInitCopy(&dst->significand, &src->significand);
 	if (!err) {
 		dst->exponent = src->exponent;
-	} else {
-		err = opabigdecConvertErr(err);
+		dst->inf = src->inf;
 	}
 	return err;
 }
 
-int opabigdecCopy(const opabigdec* src, opabigdec* dst) {
+int opabigdecCopy(opabigdec* dst, const opabigdec* src) {
 	if (src == dst) {
 		return 0;
 	}
-	int err = mp_copy(&src->significand, &dst->significand);
+	int err = opabigintCopy(&dst->significand, &src->significand);
 	if (!err) {
 		dst->exponent = src->exponent;
-	} else {
-		err = opabigdecConvertErr(err);
+		dst->inf = src->inf;
 	}
 	return err;
 }
 
 void opabigdecClear(opabigdec* a) {
-	mp_clear(&a->significand);
+	opabigintFree(&a->significand);
 	a->exponent = 0;
+	a->inf = 0;
 }
 
 int opabigdecIsNeg(const opabigdec* a) {
-	return mp_isneg(&a->significand);
+	if (a->inf) {
+		return a->inf == OPABIGDEC_NEGINF;
+	}
+	return opabigintIsNeg(&a->significand);
 }
 
 int opabigdecIsZero(const opabigdec* a) {
-	return mp_iszero(&a->significand) == MP_YES;
+	if (a->inf) {
+		return 0;
+	}
+	return opabigintIsZero(&a->significand);
 }
 
-static void opabigdecNegate(opabigdec* a) {
-#ifdef OPA_USEGMP
-	mpz_neg(&a->significand, &a->significand);
-#else
-	if (opabigdecIsZero(a)) {
-		a->significand.sign = MP_ZPOS;
-	} else {
-		a->significand.sign = (a->significand.sign == MP_ZPOS) ? MP_NEG : MP_ZPOS;
+int opabigdecIsFinite(const opabigdec* a) {
+	return a->inf == 0;
+}
+
+static int opabigdecNegate(opabigdec* dst, const opabigdec* src) {
+	int err = opabigdecCopy(dst, src);
+	if (!err) {
+		if (dst->inf) {
+			dst->inf = dst->inf == OPABIGDEC_NEGINF ? OPABIGDEC_POSINF : OPABIGDEC_NEGINF;
+		} else {
+			err = opabigintNegate(&dst->significand, &dst->significand);
+		}
 	}
-#endif
+	return err;
 }
 
 int opabigdecSet64(opabigdec* a, uint64_t val, int isNeg, int32_t exp) {
-#ifdef OPA_USEGMP
-	mp_set_u64(&a->significand, val);
-#else
-	mp_set_u64(&a->significand, val);
-#endif
-	if (isNeg) {
-		opabigdecNegate(a);
+	int err = opabigintSetU64(&a->significand, val);
+	if (isNeg && !err) {
+		err = opabigintNegate(&a->significand, &a->significand);
 	}
-	a->exponent = exp;
-	return 0;
+	if (!err) {
+		a->exponent = exp;
+		a->inf = 0;
+	}
+	return err;
 }
 
 int opabigdecGetMag64(const opabigdec* a, uint64_t* pVal) {
+	if (a->inf) {
+		return OPA_ERR_OVERFLOW;
+	}
 	// TODO: test this!
-	if (a->exponent > 0) {
+	if (a->exponent >= 0) {
 		static const uint64_t MAX10 = (UINT64_MAX) / 10;
-		if (mp_count_bits(&a->significand) > 64) {
+		if (opabigintCountBits(&a->significand) > 64) {
 			return OPA_ERR_OVERFLOW;
 		}
 		int32_t exp;
-		uint64_t val = mp_get_mag_u64(&a->significand);
+		uint64_t val = opabigintGetMagU64(&a->significand);
 		for (exp = a->exponent; exp > 0 && val <= MAX10; --exp) {
 			val = val * 10;
 		}
@@ -122,37 +121,25 @@ int opabigdecGetMag64(const opabigdec* a, uint64_t* pVal) {
 		}
 		*pVal = val;
 		return 0;
-	} else if (a->exponent < 0) {
-		opabigdec tmp;
-		mp_digit rem;
-		int err = opabigdecInitCopy(a, &tmp);
-		if (err) {
-			return err;
+	} else {
+		opabigint tmp;
+		opabigintDigit rem = 0;
+		int32_t exp;
+		int err = opabigintInitCopy(&tmp, &a->significand);
+		// TODO: can batch this into fewer calls by calling opabigintDivDig() with 10/100/1000/10000/etc
+		for (exp = a->exponent; !err && exp < 0 && rem == 0; ++exp) {
+			err = opabigintDivDig(&tmp, &rem, &tmp, 10);
 		}
-		// TODO: can batch this into fewer calls by calling mp_div_d() with 10/100/1000/10000/etc
-		while (tmp.exponent < 0) {
-			int tomerr = mp_div_d(&tmp.significand, 10, &tmp.significand, &rem);
-			if (tomerr || rem) {
-				opabigdecClear(&tmp);
-				// TODO: OPA_ERR_OVERFLOW is a bad error code name to indicate remainder?
-				return tomerr ? opabigdecConvertErr(tomerr) : OPA_ERR_OVERFLOW;
-			}
-			++tmp.exponent;
+		if (!err && (rem || opabigintCountBits(&tmp) > 64)) {
+			// TODO: OPA_ERR_OVERFLOW is a bad error code name to indicate remainder?
+			err = OPA_ERR_OVERFLOW;
 		}
-		if (mp_count_bits(&tmp.significand) > 64) {
-			opabigdecClear(&tmp);
-			return OPA_ERR_OVERFLOW;
+		if (!err) {
+			*pVal = opabigintGetMagU64(&tmp);
 		}
-		*pVal = mp_get_mag_u64(&tmp.significand);
-		opabigdecClear(&tmp);
-		return 0;
+		opabigintFree(&tmp);
+		return err;
 	}
-
-	if (mp_count_bits(&a->significand) > 64) {
-		return OPA_ERR_OVERFLOW;
-	}
-	*pVal = mp_get_mag_u64(&a->significand);
-	return 0;
 }
 
 int opabigdecExtend(opabigdec* v, uint32_t amount) {
@@ -160,10 +147,10 @@ int opabigdecExtend(opabigdec* v, uint32_t amount) {
 		return 0;
 	}
 	int err = 0;
-	if (MP_DIGIT_BIT >= 28) {
+	if (OPABIGINT_DIGIT_BITS >= 28) {
 		// TODO: this is untested
-		// can batch this into fewer calls by calling mp_mul_d() with 10/100/1000/10000/etc
-		static const mp_digit dig10a[] = {10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000};
+		// can batch this into fewer calls by calling opabigintMulDig() with 10/100/1000/10000/etc
+		static const opabigintDigit dig10a[] = {10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000};
 		static const size_t dig10num = sizeof(dig10a) / sizeof(dig10a[0]);
 		while (amount > 0 && !err) {
 			int tens = amount > dig10num ? (int)dig10num : (int)amount;
@@ -171,7 +158,7 @@ int opabigdecExtend(opabigdec* v, uint32_t amount) {
 				// prevent overflow
 				break;
 			}
-			err = mp_mul_d(&v->significand, dig10a[tens - 1], &v->significand);
+			err = opabigintMulDig(&v->significand, &v->significand, dig10a[tens - 1]);
 			if (!err) {
 				v->exponent -= tens;
 				amount -= tens;
@@ -182,153 +169,168 @@ int opabigdecExtend(opabigdec* v, uint32_t amount) {
 		if (v->exponent == INT32_MIN) {
 			return OPA_ERR_OVERFLOW;
 		}
-		err = mp_mul_d(&v->significand, 10, &v->significand);
+		err = opabigintMulDig(&v->significand, &v->significand, 10);
 		if (!err) {
 			--v->exponent;
 		}
 	}
-	return err ? opabigdecConvertErr(err) : 0;
+	return err;
 }
 
-static int opabigdecAddInternal(const opabigdec* a, const opabigdec* b, opabigdec* result) {
-	OASSERT(a->exponent == b->exponent);
-	int err = mp_add(&a->significand, &b->significand, &result->significand);
+static int opabigdecSetInf(opabigdec* result, char infval) {
+	OASSERT(infval == OPABIGDEC_NEGINF || infval == OPABIGDEC_POSINF);
+	int err = opabigintZero(&result->significand);
 	if (!err) {
-		result->exponent = opabigdecIsZero(result) ? 0 : a->exponent;
-	} else {
-		err = opabigdecConvertErr(err);
+		result->exponent = 0;
+		result->inf = infval;
 	}
 	return err;
 }
 
-int opabigdecAdd(const opabigdec* a, const opabigdec* b, opabigdec* result) {
-	if (opabigdecIsZero(a)) {
-		return opabigdecCopy(b, result);
+static int opabigdecAddInternal(opabigdec* result, const opabigdec* a, const opabigdec* b) {
+	OASSERT(a->exponent == b->exponent);
+	int err = opabigintAdd(&result->significand, &a->significand, &b->significand);
+	if (!err) {
+		result->exponent = opabigdecIsZero(result) ? 0 : a->exponent;
+	}
+	return err;
+}
+
+int opabigdecAdd(opabigdec* result, const opabigdec* a, const opabigdec* b) {
+	if (a->inf || b->inf) {
+		if (a->inf && b->inf && a->inf != b->inf) {
+			return OPA_ERR_OVERFLOW;
+		}
+		return opabigdecSetInf(result, a->inf ? a->inf : b->inf);
+	} else if (opabigdecIsZero(a)) {
+		return opabigdecCopy(result, b);
 	} else if (opabigdecIsZero(b)) {
-		return opabigdecCopy(a, result);
+		return opabigdecCopy(result, a);
 	} else if (a->exponent == b->exponent) {
-		return opabigdecAddInternal(a, b, result);
+		return opabigdecAddInternal(result, a, b);
 	} else if (a->exponent > b->exponent) {
-		return opabigdecAdd(b, a, result);
+		return opabigdecAdd(result, b, a);
 	} else if (a == result || b == result) {
 		opabigdec tmp;
-		int err = opabigdecInit(&tmp);
+		opabigdecInit(&tmp);
+		int err = opabigdecAdd(&tmp, a, b);
 		if (!err) {
-			err = opabigdecAdd(a, b, &tmp);
-			if (!err) {
-				err = opabigdecCopy(&tmp, result);
-			}
-			opabigdecClear(&tmp);
+			err = opabigdecCopy(result, &tmp);
 		}
+		opabigdecClear(&tmp);
 		return err;
 	} else {
-		int err = opabigdecCopy(b, result);
+		int err = opabigdecCopy(result, b);
 		if (!err) {
 			err = opabigdecExtend(result, b->exponent - a->exponent);
 		}
 		if (!err) {
-			err = opabigdecAddInternal(a, result, result);
+			err = opabigdecAddInternal(result, a, result);
 		}
 		return err;
 	}
 }
 
-static int opabigdecSubInternal(const opabigdec* a, const opabigdec* b, opabigdec* result) {
+static int opabigdecSubInternal(opabigdec* result, const opabigdec* a, const opabigdec* b) {
 	OASSERT(a->exponent == b->exponent);
-	int err = mp_sub(&a->significand, &b->significand, &result->significand);
+	int err = opabigintSub(&result->significand, &a->significand, &b->significand);
 	if (!err) {
 		result->exponent = opabigdecIsZero(result) ? 0 : a->exponent;
-	} else {
-		err = opabigdecConvertErr(err);
 	}
 	return err;
 }
 
-int opabigdecSub(const opabigdec* a, const opabigdec* b, opabigdec* result) {
-	if (a->exponent == b->exponent) {
-		return opabigdecSubInternal(a, b, result);
+int opabigdecSub(opabigdec* result, const opabigdec* a, const opabigdec* b) {
+	if (a->inf || b->inf) {
+		if (a->inf && b->inf && a->inf == b->inf) {
+			return OPA_ERR_OVERFLOW;
+		}
+		return opabigdecSetInf(result, a->inf ? a->inf : (b->inf == OPABIGDEC_NEGINF ? OPABIGDEC_POSINF : OPABIGDEC_NEGINF));
+	} else if (a->exponent == b->exponent) {
+		return opabigdecSubInternal(result, a, b);
 	} else if (a == result || b == result) {
 		opabigdec tmp;
-		int err = opabigdecInit(&tmp);
+		opabigdecInit(&tmp);
+		int err = opabigdecSub(&tmp, a, b);
 		if (!err) {
-			err = opabigdecSub(a, b, &tmp);
-			if (!err) {
-				err = opabigdecCopy(&tmp, result);
-			}
-			opabigdecClear(&tmp);
+			err = opabigdecCopy(result, &tmp);
 		}
+		opabigdecClear(&tmp);
 		return err;
 	} else if (a->exponent > b->exponent) {
-		int err = opabigdecCopy(a, result);
+		int err = opabigdecCopy(result, a);
 		if (!err) {
 			err = opabigdecExtend(result, a->exponent - b->exponent);
 		}
 		if (!err) {
-			err = opabigdecSubInternal(result, b, result);
+			err = opabigdecSubInternal(result, result, b);
 		}
 		return err;
 	} else {
-		int err = opabigdecCopy(b, result);
+		int err = opabigdecCopy(result, b);
 		if (!err) {
 			err = opabigdecExtend(result, b->exponent - a->exponent);
 		}
 		if (!err) {
-			err = opabigdecSubInternal(a, result, result);
+			err = opabigdecSubInternal(result, a, result);
 		}
 		return err;
 	}
 }
 
-static int opabigdecMulInternal(const opabigdec* a, const opabigdec* b, opabigdec* result) {
+static int opabigdecMulInternal(opabigdec* result, const opabigdec* a, const opabigdec* b) {
 	OASSERT(a->exponent == b->exponent);
-	int err = mp_mul(&a->significand, &b->significand, &result->significand);
+	int err = opabigintMul(&result->significand, &a->significand, &b->significand);
 	if (!err) {
 		result->exponent = opabigdecIsZero(result) ? 0 : a->exponent + b->exponent;
-	} else {
-		err = opabigdecConvertErr(err);
 	}
 	return err;
 }
 
-int opabigdecMul(const opabigdec* a, const opabigdec* b, opabigdec* result) {
-	if (a->exponent == b->exponent) {
-		return opabigdecMulInternal(a, b, result);
+int opabigdecMul(opabigdec* result, const opabigdec* a, const opabigdec* b) {
+	if (a->inf || b->inf) {
+		if (a->inf == OPABIGDEC_POSINF) {
+			return opabigdecSetInf(result, b->inf);
+		} else {
+			return opabigdecSetInf(result, b->inf == OPABIGDEC_NEGINF ? OPABIGDEC_POSINF : OPABIGDEC_NEGINF);
+		}
+	} else if (a->exponent == b->exponent) {
+		return opabigdecMulInternal(result, a, b);
 	} else if (a->exponent > b->exponent) {
-		return opabigdecMul(b, a, result);
+		return opabigdecMul(result, b, a);
 	} else if (a == result || b == result) {
 		opabigdec tmp;
-		int err = opabigdecInit(&tmp);
+		opabigdecInit(&tmp);
+		int err = opabigdecMul(&tmp, a, b);
 		if (!err) {
-			err = opabigdecMul(a, b, &tmp);
-			if (!err) {
-				err = opabigdecCopy(&tmp, result);
-			}
-			opabigdecClear(&tmp);
+			err = opabigdecCopy(result, &tmp);
 		}
+		opabigdecClear(&tmp);
 		return err;
 	} else {
-		int err = opabigdecCopy(b, result);
+		int err = opabigdecCopy(result, b);
 		if (!err) {
 			err = opabigdecExtend(result, b->exponent - a->exponent);
 		}
 		if (!err) {
-			err = opabigdecMulInternal(a, result, result);
+			err = opabigdecMulInternal(result, a, result);
 		}
 		return err;
 	}
 }
 
 static int opabigdecImport3(opabigdec* bd, const uint8_t* src, size_t numBytes, int isNeg, int isBigEndian, int32_t exponent) {
-	int endian = isBigEndian ? 1 : -1;
-	int tomerr = mp_unpack(&bd->significand, numBytes, endian, 1, endian, 0, src);
-	if (tomerr != MP_OKAY) {
-		return opabigdecConvertErr(tomerr);
+	if (!isBigEndian) {
+		return OPA_ERR_INVARG;
 	}
-	if (isNeg) {
-		opabigdecNegate(bd);
+	int err = opabigintReadBytes(&bd->significand, src, numBytes);
+	if (isNeg && !err) {
+		err = opabigdecNegate(bd, bd);
 	}
-	bd->exponent = opabigdecIsZero(bd) ? 0 : exponent;
-	return 0;
+	if (!err) {
+		bd->exponent = opabigdecIsZero(bd) ? 0 : exponent;
+	}
+	return err;
 }
 
 static int opabigdecLoadVarint(opabigdec* bd, const uint8_t* so, int isNeg) {
@@ -390,6 +392,9 @@ static int opabigdecLoadBigDec(opabigdec* dst, const uint8_t* src, int isNegExp,
 
 int opabigdecLoadSO(opabigdec* bd, const uint8_t* so) {
 	switch (*so) {
+		case OPADEF_NEGINF:    return opabigdecSetInf(bd, OPABIGDEC_NEGINF);
+		case OPADEF_POSINF:    return opabigdecSetInf(bd, OPABIGDEC_POSINF);
+
 		case OPADEF_ZERO:      return opabigdecSet64(bd, 0, 0, 0);
 
 		case OPADEF_POSVARINT: return opabigdecLoadVarint(bd, so, 0);
@@ -412,54 +417,8 @@ int opabigdecLoadSO(opabigdec* bd, const uint8_t* so) {
 	}
 }
 
-// exports without needing a copy of the value. therefore, no error will occur due to memory allocation
-// can only export in word chunks of 1 byte
-// TODO: test this
-static void mp_export_rewrite(const mp_int* val, int useBigEndian, uint8_t* buff) {
-	size_t bits = mp_count_bits(val);
-	if (bits == 0) {
-		return;
-	}
-	size_t numBytes = (bits / 8) + (((bits % 8) != 0) ? 1 : 0);
-
-	uint8_t* pos = useBigEndian ? buff + numBytes - 1 : buff;
-#ifdef OPA_USEGMP
-	const mp_digit* currDig = val->_mp_d;
-#else
-	const mp_digit* currDig = val->dp;
-#endif
-	size_t bitIdx = 0;
-	while (bits > 0) {
-		uint8_t byte = 0;
-
-		if (bits >= 8 && bitIdx <= MP_DIGIT_BIT - 8) {
-			// read 8 bit chunk if possible
-			byte = (*currDig >> bitIdx) & 0xFF;
-			bits -= 8;
-			bitIdx += 8;
-		} else {
-			// read 8 bits, one at a time
-			size_t numToLoad = bits >= 8 ? 8 : bits;
-			for (size_t j = 0; j < numToLoad; ++j, --bits, ++bitIdx) {
-				if (bitIdx == MP_DIGIT_BIT) {
-					++currDig;
-					bitIdx = 0;
-				}
-				byte |= ((*currDig >> bitIdx) & 0x1) << j;
-			}
-		}
-
-		*pos = byte;
-		if (useBigEndian) {
-			--pos;
-		} else {
-			++pos;
-		}
-	}
-}
-
 static size_t opabigdecNumBytesForBigInt(const opabigdec* a, uint8_t bytesPerWord) {
-	size_t bits = mp_count_bits(&a->significand);
+	size_t bits = opabigintCountBits(&a->significand);
 	size_t numWords = (bits / (bytesPerWord * 8)) + (((bits % (bytesPerWord * 8)) != 0) ? 1 : 0);
 	return numWords * bytesPerWord;
 }
@@ -472,7 +431,7 @@ static size_t opabigdecExport3(const opabigdec* bd, uint8_t useBigEndian, uint8_
 
 	size_t lenReq = opabigdecNumBytesForBigInt(bd, 1);
 	if (buffLen >= lenReq) {
-		mp_export_rewrite(&bd->significand, useBigEndian, buff);
+		opabigintWriteBytes(&bd->significand, useBigEndian, buff, lenReq);
 	}
 	return lenReq;
 }
@@ -489,6 +448,13 @@ static size_t opabigdecSaveBigInt(const opabigdec* val, uint8_t* buff, size_t bu
 
 size_t opabigdecStoreSO(const opabigdec* val, uint8_t* buff, size_t buffLen) {
 	// note: number could be stored as decimal but not need to be serialized as decimal. ie, 1000e-3=1 12e2=1200
+	if (val->inf) {
+		if (buffLen > 0) {
+			*buff = val->inf == OPABIGDEC_NEGINF ? OPADEF_NEGINF : OPADEF_POSINF;
+		}
+		return 1;
+	}
+
 	if (opabigdecIsZero(val)) {
 		if (buffLen > 0) {
 			*buff = OPADEF_ZERO;
@@ -496,8 +462,8 @@ size_t opabigdecStoreSO(const opabigdec* val, uint8_t* buff, size_t buffLen) {
 		return 1;
 	}
 
-	if (mp_count_bits(&val->significand) < 64) {
-		uint64_t val64 = mp_get_mag_u64(&val->significand);
+	if (opabigintCountBits(&val->significand) < 64) {
+		uint64_t val64 = opabigintGetMagU64(&val->significand);
 		if (val->exponent == 0) {
 			// varint
 			size_t lenNeeded = 1 + opaviStoreLen(val64);
@@ -539,20 +505,28 @@ size_t opabigdecStoreSO(const opabigdec* val, uint8_t* buff, size_t buffLen) {
 	}
 }
 
-int opabigdecFromStr(opabigdec* v, const char* str, int radix) {
+int opabigdecFromStr(opabigdec* v, const char* str, const char* end, int radix) {
 	if (radix < 2 || radix > 10) {
 		// only support up to base 10 for now. cannot mix hex chars with e/E exponent separator
 		return OPA_ERR_INVARG;
 	}
 
-	int tomerr;
+	int infval = opaIsInfStr(str, end - str);
+	if (infval) {
+		return opabigdecSetInf(v, infval < 0 ? OPABIGDEC_NEGINF : OPABIGDEC_POSINF);
+	}
+
+	int err;
 	int neg;
 	const char* decPos = NULL;
 	ptrdiff_t decLen = 0;
 
-	mp_zero(&v->significand);
+	err = opabigintZero(&v->significand);
+	if (err) {
+		return err;
+	}
 
-	if (*str == '-') {
+	if (str < end && *str == '-') {
 		++str;
 		neg = 1;
 	} else {
@@ -560,16 +534,16 @@ int opabigdecFromStr(opabigdec* v, const char* str, int radix) {
 	}
 
 	while (1) {
-		for (;*str >= '0' && *str <= '9'; ++str) {
-			if ((tomerr = mp_mul_d(&v->significand, radix, &v->significand)) != MP_OKAY) {
-				return opabigdecConvertErr(tomerr);
+		for (; str < end && *str >= '0' && *str <= '9'; ++str) {
+			if ((err = opabigintMulDig(&v->significand, &v->significand, radix)) != 0) {
+				return err;
 			}
-			if ((tomerr = mp_add_d(&v->significand, (unsigned int) (*str - '0'), &v->significand)) != MP_OKAY) {
-				return opabigdecConvertErr(tomerr);
+			if ((err = opabigintAddDig(&v->significand, &v->significand, (unsigned int) (*str - '0'))) != 0) {
+				return err;
 			}
 		}
 		// TODO: handle other locale characters? might use , rather than . ??
-		if (*str == '.' && decPos == NULL) {
+		if (str < end && *str == '.' && decPos == NULL) {
 			decPos = ++str;
 			continue;
 		}
@@ -580,17 +554,19 @@ int opabigdecFromStr(opabigdec* v, const char* str, int radix) {
 		decLen = str - decPos;
 	}
 
-	if (*str == 'e' || *str == 'E') {
+	if (str < end && (*str == 'e' || *str == 'E')) {
 		++str;
 		int negExp = 0;
-		if (*str == '-') {
-			negExp = 1;
-			++str;
-		} else if (*str == '+') {
-			++str;
+		if (str < end) {
+			if (*str == '-') {
+				negExp = 1;
+				++str;
+			} else if (*str == '+') {
+				++str;
+			}
 		}
 		uint64_t currVal = 0;
-		for (; *str >= '0' && *str <= '9'; ++str) {
+		for (; str < end && *str >= '0' && *str <= '9'; ++str) {
 			currVal = (currVal * radix) + (*str - '0');
 			if ((negExp && currVal > (uint64_t)INT32_MAX + 1) || (!negExp && currVal > INT32_MAX)) {
 				return OPA_ERR_OVERFLOW;
@@ -603,6 +579,7 @@ int opabigdecFromStr(opabigdec* v, const char* str, int radix) {
 
 	if (decLen != 0) {
 		// TODO: check for overflow
+		//   https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html
 		int64_t newVal = v->exponent - decLen;
 		if (newVal < INT32_MIN || newVal > INT32_MAX) {
 			return OPA_ERR_OVERFLOW;
@@ -610,15 +587,17 @@ int opabigdecFromStr(opabigdec* v, const char* str, int radix) {
 		v->exponent = (int32_t) newVal;
 	}
 
-	if (opabigdecIsZero(v)) {
-		v->exponent = 0;
-	} else {
-		if (neg) {
-			opabigdecNegate(v);
+	if (!err) {
+		if (opabigdecIsZero(v)) {
+			v->exponent = 0;
+		} else {
+			if (neg) {
+				err = opabigdecNegate(v, v);
+			}
 		}
 	}
 
-	return 0;
+	return err;
 }
 
 static size_t opabigdecCharsPerBit(size_t bits, int radix) {
@@ -643,10 +622,13 @@ static size_t opabigdecCharsPerBit(size_t bits, int radix) {
 }
 
 size_t opabigdecMaxStringLen(const opabigdec* a, int radix) {
+	if (a->inf) {
+		return a->inf == OPABIGDEC_NEGINF ? 5 : 4;
+	}
 	// TODO: use mp_radix_size()? it uses division so will be slower but is exact. code currently gives approximation
-	size_t chars = opabigdecCharsPerBit(mp_count_bits(&a->significand), radix);
+	size_t chars = opabigdecCharsPerBit(opabigintCountBits(&a->significand), radix);
 
-	if (mp_isneg(&a->significand)) {
+	if (opabigintIsNeg(&a->significand)) {
 		// extra char for negative sign
 		++chars;
 	}
@@ -721,14 +703,21 @@ int opabigdecToString(const opabigdec* a, char* str, size_t space, size_t* pWrit
 		return OPA_ERR_INVARG;
 	}
 
-	int err;
+	if (a->inf) {
+		const char* infStr = a->inf == OPABIGDEC_NEGINF ? "-inf" : "inf";
+		size_t infStrLen = strlen(infStr);
+		size_t numToCopy = space - 1 < infStrLen ? space - 1 : infStrLen;
+		memcpy(str, infStr, numToCopy);
+		str[numToCopy] = 0;
+		if (pWritten != NULL) {
+			*pWritten = numToCopy + 1;
+		}
+		return 0;
+	}
+
 	size_t strBytes;
 	char* _s = str;
-	if (radix == 10) {
-		err = mp_to_radix10(&a->significand, str, space, &strBytes);
-	} else {
-		err = mp_to_radix(&a->significand, str, space, &strBytes, radix);
-	}
+	int err = opabigintToRadix(&a->significand, str, space, &strBytes, radix);
 
 	if (!err && a->exponent != 0) {
 		// skip past the chars that were already written
@@ -790,8 +779,6 @@ int opabigdecToString(const opabigdec* a, char* str, size_t space, size_t* pWrit
 				}
 			}
 		}
-	} else {
-		err = opabigdecConvertErr(err);
 	}
 
 	if (pWritten != NULL && !err) {

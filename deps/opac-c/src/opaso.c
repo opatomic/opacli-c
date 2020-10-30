@@ -13,6 +13,8 @@ static const char* HEXCHARS = "0123456789ABCDEF";
 
 int opasoIsNumber(uint8_t type) {
 	switch (type) {
+		case OPADEF_NEGINF:
+		case OPADEF_POSINF:
 		case OPADEF_ZERO:
 		case OPADEF_POSVARINT:
 		case OPADEF_NEGVARINT:
@@ -47,6 +49,8 @@ size_t opasolen(const uint8_t* obj) { // @suppress("No return")
 		case OPADEF_NULL:
 		case OPADEF_FALSE:
 		case OPADEF_TRUE:
+		case OPADEF_NEGINF:
+		case OPADEF_POSINF:
 		case OPADEF_ZERO:
 		case OPADEF_SORTMAX:
 
@@ -240,6 +244,8 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 
 		case OPADEF_ZERO:
 			return opabuffAppend1(b, '0');
+		case OPADEF_NEGINF:
+		case OPADEF_POSINF:
 		case OPADEF_NEGVARINT:
 		case OPADEF_POSVARINT:
 		case OPADEF_NEGBIGINT:
@@ -253,25 +259,23 @@ static int opasoStringifyInternal(const uint8_t* src, const char* space, unsigne
 		case OPADEF_NEGPOSBIGDEC:
 		case OPADEF_NEGNEGBIGDEC: {
 			opabigdec bd;
-			int err = opabigdecInit(&bd);
+			opabigdecInit(&bd);
+			int err = opabigdecLoadSO(&bd, src);
 			if (!err) {
-				err = opabigdecLoadSO(&bd, src);
+				size_t maxlen = opabigdecMaxStringLen(&bd, 10);
+				size_t origLen = opabuffGetLen(b);
+				err = opabuffSetLen(b, origLen + maxlen + 1);
 				if (!err) {
-					size_t maxlen = opabigdecMaxStringLen(&bd, 10);
-					size_t origLen = opabuffGetLen(b);
-					err = opabuffSetLen(b, origLen + maxlen + 1);
+					char* strpos = (char*) opabuffGetPos(b, origLen);
+					size_t lenWithNull;
+					err = opabigdecToString(&bd, strpos, maxlen, &lenWithNull, 10);
 					if (!err) {
-						char* strpos = (char*) opabuffGetPos(b, origLen);
-						size_t lenWithNull;
-						err = opabigdecToString(&bd, strpos, maxlen, &lenWithNull, 10);
-						if (!err) {
-							OASSERT(lenWithNull > 0);
-							err = opabuffSetLen(b, origLen + lenWithNull - 1);
-						}
+						OASSERT(lenWithNull > 0);
+						err = opabuffSetLen(b, origLen + lenWithNull - 1);
 					}
 				}
-				opabigdecClear(&bd);
 			}
+			opabigdecClear(&bd);
 			return err;
 		}
 

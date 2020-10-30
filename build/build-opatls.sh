@@ -63,10 +63,6 @@ opatlsSetVars() {
 }
 
 buildmbedtls() {
-	if [ "$OPA_MBEDTLS" = "0" ]; then
-		return
-	fi
-
 	if [ -z "$MBEDTLS_DIR" ] || [ -z "$MBEDTLS_BRANCH" ] || [ -z "$MBEDTLS_CONFIG_FILE" ]; then
 		echo '$MBEDTLS_DIR and $MBEDTLS_BRANCH and $MBEDTLS_CONFIG_FILE must be set'
 		exit 1

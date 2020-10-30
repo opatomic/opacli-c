@@ -26,7 +26,9 @@ static void oparbAppend(oparb* rb, const void* src, size_t srcLen) {
 void oparbInit(oparb* rb, const uint8_t* asyncId, size_t idLen) {
 	memset(rb, 0, sizeof(oparb));
 	oparbAppend1(rb, OPADEF_ARRAY_START);
-	oparbAppend(rb, asyncId, idLen);
+	if (asyncId != NULL && idLen > 0) {
+		oparbAppend(rb, asyncId, idLen);
+	}
 }
 
 static void oparbAppendStrOrBin(oparb* rb, size_t len, const void* arg, uint8_t type) {
@@ -108,14 +110,12 @@ static void oparbAddVarint(oparb* rb, uint8_t type, uint64_t val) {
 		// val too big for varint
 		if (!rb->err) {
 			opabigdec bd;
-			rb->err = opabigdecInit(&bd);
+			opabigdecInit(&bd);
+			rb->err = opabigdecSet64(&bd, val, type == OPADEF_NEGVARINT, 0);
 			if (!rb->err) {
-				rb->err = opabigdecSet64(&bd, val, type == OPADEF_NEGVARINT, 0);
-				if (!rb->err) {
-					oparbAddBigDec(rb, &bd);
-				}
-				opabigdecClear(&bd);
+				oparbAddBigDec(rb, &bd);
 			}
+			opabigdecClear(&bd);
 		}
 	}
 }
@@ -137,17 +137,15 @@ void oparbAddSO(oparb* rb, const uint8_t* so) {
 	oparbAppend(rb, so, opasolen(so));
 }
 
-void oparbAddNumStr(oparb* rb, const char* s) {
+void oparbAddNumStr(oparb* rb, const char* s, const char* end) {
 	if (!rb->err) {
 		opabigdec bd;
-		rb->err = opabigdecInit(&bd);
+		opabigdecInit(&bd);
+		rb->err = opabigdecFromStr(&bd, s, end, 10);
 		if (!rb->err) {
-			rb->err = opabigdecFromStr(&bd, s, 10);
-			if (!rb->err) {
-				oparbAddBigDec(rb, &bd);
-			}
-			opabigdecClear(&bd);
+			oparbAddBigDec(rb, &bd);
 		}
+		opabigdecClear(&bd);
 	}
 }
 
@@ -371,6 +369,10 @@ static uint8_t oparbConvertToken(const void* s, size_t slen) {
 	} else if (oparbIsToken(s, slen, "SORTMAX")) {
 		return OPADEF_SORTMAX;
 	}
+	int infval = opaIsInfStr(s, slen);
+	if (infval) {
+		return infval < 0 ? OPADEF_NEGINF : OPADEF_POSINF;
+	}
 	return 0;
 }
 
@@ -379,7 +381,7 @@ static void oparbAddUserToken(oparb* rb, const char* s, const char* end) {
 	if (replacement != 0) {
 		oparbAppend1(rb, replacement);
 	} else if (opaIsNumStr(s, end)) {
-		oparbAddNumStr(rb, s);
+		oparbAddNumStr(rb, s, end);
 	} else {
 		oparbAddUserStrOrBin(rb, s, end, OPADEF_STR_LPVI);
 	}
