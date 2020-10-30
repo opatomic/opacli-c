@@ -15,15 +15,13 @@ MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
 
 
 # note: defining OPAC_READLEN to small value will make the client run slow but will help coverage test more lines
-CFLAGS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2 -DOPA_MBEDTLS $CFLAGS"
+CFLAGS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2 -DOPA_MBEDTLS -DOPABIGINT_USE_MBED $CFLAGS"
 LDFLAGS="-g -fprofile-arcs -ftest-coverage $LDFLAGS"
 
 ensuredir "$TMPDIR"
 rm -rf "${TMPDIR:?}/"*
 
 cp "$DEPSDIR/opac-c/src/"* "$TMPDIR"
-cp "$DEPSDIR/libtommath/"*.c "$TMPDIR"
-cp "$DEPSDIR/libtommath/"*.h "$TMPDIR"
 cp "../src/"* "$TMPDIR"
 cp "../src/opatls/"*.c "$TMPDIR"
 
