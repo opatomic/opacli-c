@@ -184,7 +184,7 @@ static void usleep(unsigned long usec) {
 
 static int opaGetLineWinConsole(HANDLE h, opabuff* b) {
 	int err = 0;
-	opabuff wbuff = {0};
+	opabuff wbuff;
 	opabuffInit(&wbuff, b->flags & OPABUFF_F_ZERO);
 	while (!err) {
 		DWORD numRead = 0;
@@ -854,7 +854,8 @@ static int mainInternal(int argc, const char* argv[]) {
 	if (useLinenoise && usercmdIdx > 0) {
 		useLinenoise = 0;
 	}
-	opabuff lineb = {0};
+	opabuff lineb;
+	opabuffInit(&lineb, 0);
 	char* line = NULL;
 
 	if (usercmdIdx > 0) {
