@@ -12,15 +12,12 @@
 
 #ifdef _WIN32
 #define fopen winfopen
-#define strcasecmp _stricmp
 // fseeko/ftello/off_t are defined when compiling with mingw and _FILE_OFFSET_BITS=64 (see /usr/share/mingw-w64/include/stdio.h)
 #ifndef ftello
 #define fseeko _fseeki64
 #define ftello _ftelli64
 #define off_t __int64
 #endif
-#else
-#include <strings.h>
 #endif
 
 #ifdef __APPLE__
@@ -191,23 +188,23 @@ int tlsutilsLoadPsk(const char* filename, opatlsPsk** ppPsk) {
 
 const opatlsLib* tlsutilsGetLib(const char* name) {
 	const opatlsLib* lib = NULL;
-	if (strcasecmp(name, "mbed") == 0 || strcasecmp(name, "mbedtls") == 0) {
+	if (opaStrCmpNoCaseAscii(name, "mbed") == 0 || opaStrCmpNoCaseAscii(name, "mbedtls") == 0) {
 		#ifdef OPA_MBEDTLS
 			lib = &mbedLib;
 		#endif
-	} else if (strcasecmp(name, "openssl") == 0) {
+	} else if (opaStrCmpNoCaseAscii(name, "openssl") == 0) {
 		#ifdef OPA_OPENSSL
 			if (opensslLoadLib()) {
 				lib = &opensslLib;
 			}
 		#endif
-	} else if (strcasecmp(name, "schan") == 0) {
+	} else if (opaStrCmpNoCaseAscii(name, "schan") == 0) {
 		#ifdef OPA_WINSCHAN
 			if (winIsVerGTE(6, 1) && schanInit()) {
 				lib = &schanLib;
 			}
 		#endif
-	} else if (strcasecmp(name, "sectrans") == 0) {
+	} else if (opaStrCmpNoCaseAscii(name, "sectrans") == 0) {
 		#ifdef OPA_SECTRANS
 			lib = &sectransLib;
 		#endif

@@ -19,7 +19,6 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
-#define strcasecmp _stricmp
 #define isatty _isatty
 #ifndef STDIN_FILENO
 #define STDIN_FILENO _fileno(stdin)
@@ -34,7 +33,6 @@
 #define USELINENOISE 0
 #endif
 #else
-#include <strings.h>
 #include <termios.h>
 #include <unistd.h>
 #ifndef USELINENOISE
@@ -916,7 +914,7 @@ static int mainInternal(int argc, const char* argv[]) {
 			exit(EXIT_FAILURE);
 		}
 
-		if (strcasecmp(line, "quit") == 0 || strcasecmp(line, "exit") == 0) {
+		if (opaStrCmpNoCaseAscii(line, "quit") == 0 || opaStrCmpNoCaseAscii(line, "exit") == 0) {
 			break;
 		}
 
