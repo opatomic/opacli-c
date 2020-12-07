@@ -144,7 +144,7 @@ int opatlsConfigUseCertP12(opatlsConfig* tc, const char* certPath, const char* p
 int opatlsConfigVerifyPeer(opatlsConfig* tc, int verify);
 void opatlsConfigClear(opatlsConfig* tc);
 
-int opatlsConfigSetupNewState(opatlsConfig* tc, opatlsState* state, void* stateData);
+int opatlsConfigSetupNewState(const opatlsConfig* tc, opatlsState* state, void* stateData);
 
 
 #endif

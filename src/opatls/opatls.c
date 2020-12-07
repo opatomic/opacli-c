@@ -212,7 +212,7 @@ void opatlsConfigClear(opatlsConfig* tc) {
 	memset(tc, 0, sizeof(opatlsConfig));
 }
 
-int opatlsConfigSetupNewState(opatlsConfig* tc, opatlsState* state, void* stateData) {
+int opatlsConfigSetupNewState(const opatlsConfig* tc, opatlsState* state, void* stateData) {
 	int allocd = 0;
 	if (stateData == NULL && tc->lib->stateDataLen > 0) {
 		stateData = OPACALLOC(tc->lib->stateDataLen, 1);
