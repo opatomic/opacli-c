@@ -70,8 +70,6 @@ static void opasockConnectInternal(opasock* s, const char* remoteAddr, uint16_t 
 	struct addrinfo hints = {.ai_flags = aiFlags, .ai_family = aiFamily, .ai_socktype = aiSockType, 0};
 	struct addrinfo* allInfo = NULL;
 
-	// TODO: look into using IdnToAscii on windows for non-ascii remoteAddr
-
 	snprintf(portStr, sizeof(portStr), "%d", remotePort);
 	int err = getaddrinfo(remoteAddr, portStr, &hints, &allInfo);
 	if (err) {
