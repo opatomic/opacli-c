@@ -32,6 +32,7 @@
 
 #ifdef _WIN32
 #define OPASOCKLOGERR() LOGWINERRCODE(WSAGetLastError())
+#define MSG_DONTWAIT 0
 #else
 #ifdef __APPLE__
 // TODO: since apple doesn't have MSG_NOSIGNAL, should use signal(SIGPIPE, SIG_IGN) instead?
@@ -68,6 +69,8 @@ static void opasockConnectInternal(opasock* s, const char* remoteAddr, uint16_t 
 	struct addrinfo hints = {.ai_flags = aiFlags, .ai_family = aiFamily, .ai_socktype = aiSockType, 0};
 	struct addrinfo* allInfo = NULL;
 
+	// TODO: look into using IdnToAscii on windows for non-ascii remoteAddr
+
 	snprintf(portStr, sizeof(portStr), "%d", remotePort);
 	int err = getaddrinfo(remoteAddr, portStr, &hints, &allInfo);
 	if (err) {
@@ -90,15 +93,14 @@ static void opasockConnectInternal(opasock* s, const char* remoteAddr, uint16_t 
 		}
 	}
 	freeaddrinfo(allInfo);
-
-	if (s->sid == SOCKID_NONE) {
-		OPALOGERRF("could not bind address; addr=%s port=%u", remoteAddr, remotePort);
-	}
 }
 
 int opasockIsLoopback(const opasock* s) {
 	struct sockaddr_storage addr;
 	socklen_t addrLen = sizeof(addr);
+	// note: if socket was accepted from AcceptEx on win2k, then getpeername() will not work
+	//   properly (returns no error, but struct is all 0's). Must use GetAcceptExSockaddrs()
+	//   after calling AcceptEx()
 	if (getpeername(s->sid, (struct sockaddr*)&addr, &addrLen) == 0) {
 		if (addr.ss_family == AF_INET) {
 			// ipv4
@@ -121,6 +123,57 @@ int opasockIsLoopback(const opasock* s) {
 
 void opasockConnect(opasock* s, const char* remoteAddr, uint16_t remotePort) {
 	opasockConnectInternal(s, remoteAddr, remotePort, AF_UNSPEC, SOCK_STREAM, 0);
+}
+
+int opasockSetNonBlocking(opasock* s, int onOrOff) {
+#ifdef _WIN32
+	unsigned long val = onOrOff ? 1 : 0;
+	if (ioctlsocket(s->sid, FIONBIO, &val)) {
+		OPASOCKLOGERR();
+		return OPA_ERR_INTERNAL;
+	}
+	return 0;
+#else
+	int flags = fcntl(s->sid, F_GETFL);
+	if (flags == -1 || fcntl(s->sid, F_SETFL, onOrOff ? flags | O_NONBLOCK : flags & ~O_NONBLOCK) == -1) {
+		LOGSYSERRNO();
+		return OPA_ERR_INTERNAL;
+	}
+	return 0;
+#endif
+}
+
+/*
+ * Return zero if peer has performed orderly shutdown and recv will not return any more bytes for the socket. Else
+ * return non-zero. Note that a zero return value conclusively indicates that calling recv will never provide more
+ * data. However a non-zero return code does not indicate for certain that the socket will provide more data for recv.
+ * IE, the socket connection was lost without an orderly shutdown from the peer.
+ */
+int opasockMayRecvMore(opasock* s, int isNonBlocking) {
+	char tmp[1];
+#ifdef _WIN32
+	// windows does not have MSG_DONTWAIT flag for recv
+	if (!isNonBlocking) {
+		int err = opasockSetNonBlocking(s, 1);
+		if (err) {
+			return 1;
+		}
+	}
+#else
+	UNUSED(isNonBlocking);
+#endif
+	ssize_t result = recv(s->sid, tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+#ifdef _WIN32
+	if (!isNonBlocking) {
+		int err = opasockSetNonBlocking(s, 0);
+		if (err) {
+			OPALOGERR("unable to return socket to blocking mode");
+		}
+	}
+#endif
+	// recv returns 0 when peer has performed an orderly shutdown; otherwise it returns -1 on error or number of bytes received
+	// therefore, return non-zero if error occurs or 1 byte is available.
+	return result != 0;
 }
 
 int opasockRecv(opasock* s, void* buff, size_t len, size_t* pNumRead) {

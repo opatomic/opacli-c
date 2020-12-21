@@ -28,6 +28,8 @@ void opasockInit(opasock* s);
 void opasockConnect(opasock* s, const char* remoteAddr, uint16_t remotePort);
 int opasockIsLoopback(const opasock* s);
 int opasockClose(opasock* s);
+int opasockSetNonBlocking(opasock* s, int onOrOff);
+int opasockMayRecvMore(opasock* s, int isNonBlocking);
 int opasockRecv(opasock* s, void* buff, size_t len, size_t* pNumRead);
 int opasockSend(opasock* s, const void* buff, size_t len, size_t* pNumWritten);
 

@@ -88,9 +88,24 @@
 typedef struct {
 	opasock s;
 	char useTls;
+	char needsClosed;
+	char connectedOnce;
 	opatlsState tls;
 	opac client;
+	char* authpass; // stores password when AUTH succeeds
 } opacliClient;
+
+typedef struct {
+	const char* host;
+	const char* sni;
+	const char* pass; // password provided on command line
+	uint16_t port;
+	char useTLS;
+	char istty;
+	char printStatus;
+	char authp;
+	opatlsConfig tlscfg;
+} opacliConnectOptions;
 
 
 
@@ -249,16 +264,8 @@ static size_t opacliReadCB(opac* c, void* buff, size_t len) {
 	} else {
 		err = opasockRecv(&cli->s, buff, len, &tot);
 	}
-	if (err) {
-		// TODO: close client and detect closed client from loop; allow reconnect?
-		if (err == OPA_ERR_EOF) {
-			// peer has performed orderly shutdown
-			// TODO: if a response is outstanding then exit with error code?
-			printf("socket closed\n");
-			exit(EXIT_SUCCESS);
-		}
-		printf("socket err in recv; err %d\n", err);
-		exit(EXIT_FAILURE);
+	if (err && err != OPA_ERR_WOULDBLOCK) {
+		cli->needsClosed = 1;
 	}
 	return tot;
 }
@@ -272,10 +279,8 @@ static size_t opacliWriteCB(opac* c, const void* buff, size_t len) {
 	} else {
 		err = opasockSend(&cli->s, buff, len, &tot);
 	}
-	if (err) {
-		// TODO: close client and detect closed client from loop; allow reconnect?
-		printf("socket err in send; err %d\n", err);
-		exit(EXIT_FAILURE);
+	if (err && err != OPA_ERR_WOULDBLOCK) {
+		cli->needsClosed = 1;
 	}
 	return tot;
 }
@@ -300,8 +305,6 @@ static int tlssockWriteCB(void* cbdata, const void* buff, size_t numToWrite, siz
 	opacliClient* c = (opacliClient*) cbdata;
 	return opasockSend(&c->s, buff, numToWrite, pNumWritten);
 }
-
-const opatlsioStreamCBs STREAMCBS = {tlssockReadCB, tlssockWriteCB};
 
 #if !USELINENOISE
 static char* linenoise(const char* prompt) {
@@ -414,13 +417,47 @@ static int opacliGetPassFromTerm(FILE* fin, FILE* fout, int mask, opabuff* b) {
 }
 #endif
 
-static void opacQueueSendRecv(opac* c, opacReq* req) {
-	opacQueueRequest(c, req);
-	while (!opacReqIsSent(req) && opacIsOpen(c)) {
-		opacSendRequests(c);
+static void opacliClientClose(opacliClient* c) {
+	opasockClose(&c->s);
+	opacClose(&c->client);
+	c->needsClosed = 0;
+	opatlsStateClear(&c->tls);
+}
+
+static void opacliQueueSendRecv(opacliClient* c, opacReq* req) {
+	opacQueueRequest(&c->client, req);
+	while (!opacReqIsSent(req) && opacIsOpen(&c->client)) {
+		if (c->needsClosed) {
+			opacliClientClose(c);
+			break;
+		}
+		opacSendRequests(&c->client);
 	}
-	while (!opacReqResponseRecvd(req) && opacIsOpen(c)) {
-		opacParseResponses(c);
+	while (!opacReqResponseRecvd(req) && opacIsOpen(&c->client)) {
+		if (c->needsClosed) {
+			opacliClientClose(c);
+			break;
+		}
+		opacParseResponses(&c->client);
+	}
+}
+
+static char* opastrdup(const char* s) {
+	if (s == NULL) {
+		return NULL;
+	}
+	size_t len = strlen(s);
+	char* c = OPAMALLOC(len + 1);
+	if (c != NULL) {
+		memcpy(c, s, len + 1);
+	}
+	return c;
+}
+
+static void freepass(char* p) {
+	if (p != NULL) {
+		memset(p, 0, strlen(p));
+		OPAFREE(p);
 	}
 }
 
@@ -428,7 +465,7 @@ static void opacQueueSendRecv(opac* c, opacReq* req) {
  * Synchronously send/recv AUTH request with specified password
  * @return 0 if AUTH completed successfully; else error code
  */
-static int opacSecureAuth(opac* c, const char* pass) {
+static int opacliSyncAuth(opacliClient* c, const char* pass) {
 	static const char* AUTHCMD = "AUTH";
 	static const size_t AUTHLEN = 4;
 	OASSERT(AUTHLEN == strlen(AUTHCMD));
@@ -467,10 +504,20 @@ static int opacSecureAuth(opac* c, const char* pass) {
 	opacReqInit(&req);
 	opacReqSetRequestBuff(&req, buff);
 	// note: once req is sent, opabuffFree() will be called for the request which should zero the memory
-	opacQueueSendRecv(c, &req);
+	opacliQueueSendRecv(c, &req);
 
-	int authErr = opacIsOpen(c) && opacReqResponseRecvd(&req) && !opacReqResponseIsErr(&req) ? 0 : OPA_ERR_INTERNAL;
+	int authErr = opacIsOpen(&c->client) && opacReqResponseRecvd(&req) && !opacReqResponseIsErr(&req) ? 0 : OPA_ERR_INTERNAL;
 	opacReqFreeResponse(&req);
+
+	if (!authErr) {
+		if (c->authpass == NULL) {
+			c->authpass = opastrdup(pass);
+		} else if (strcmp(pass, c->authpass) != 0) {
+			freepass(c->authpass);
+			c->authpass = opastrdup(pass);
+		}
+	}
+
 	return authErr;
 }
 
@@ -478,15 +525,15 @@ static int opacSecureAuth(opac* c, const char* pass) {
  * synchronously send/recv a PING request to determine whether AUTH is needed
  * @return 1 if server replies with AUTH required error; else 0 if server replies with PONG or some error occurs
  */
-static int opacIsAuthNeeded(opac* c) {
+static int opacliIsAuthNeeded(opacliClient* c) {
 	int authreq = 0;
 	oparb ureq = oparbParseUserCommand("PING");
 	if (!ureq.err) {
 		opacReq req;
 		opacReqInit(&req);
 		opacReqSetRequestBuff(&req, ureq.buff);
-		opacQueueSendRecv(c, &req);
-		if (opacIsOpen(c) && opacReqResponseRecvd(&req) && opacReqResponseIsErr(&req)) {
+		opacliQueueSendRecv(c, &req);
+		if (opacIsOpen(&c->client) && opacReqResponseRecvd(&req) && opacReqResponseIsErr(&req)) {
 			opacRpcError errObj;
 			int err = opacReqLoadErrObj(&req, &errObj);
 			if (!err && errObj.code == ERR_AUTHREQ) {
@@ -503,15 +550,12 @@ static void printAndFlush(FILE* f, const char* str) {
 	fflush(f);
 }
 
-static void opacliDoAuth2(opac* c, const char* pass, int prompt, FILE* fin, FILE* fout) {
-	if (pass == NULL && !prompt) {
-		return;
-	}
+static void opacliDoAuth2(opacliClient* c, const char* pass, int promptOnFailure, FILE* fin, FILE* fout) {
 	opabuff buff;
 	opabuffInit(&buff, OPABUFF_F_NOPAGING | OPABUFF_F_ZERO);
 
 	while (1) {
-		if (prompt) {
+		if (pass == NULL) {
 			// TODO: print host?
 			opabuffSetLen(&buff, 0);
 			printAndFlush(fout, "password: ");
@@ -527,22 +571,25 @@ static void opacliDoAuth2(opac* c, const char* pass, int prompt, FILE* fin, FILE
 			break;
 		}
 
-		int authErr = opacSecureAuth(c, pass);
+		int authErr = opacliSyncAuth(c, pass);
 		if (!authErr) {
 			break;
 		}
 
+		// TODO: if authErr indicates that a problem occurred other than invalid password, then return error code
+
 		printAndFlush(fout, "auth failed\n");
-		if (!prompt) {
+		if (!promptOnFailure) {
 			opabuffFree(&buff);
 			exit(EXIT_FAILURE);
 		}
+		pass = NULL;
 	}
 
 	opabuffFree(&buff);
 }
 
-static void opacliDoAuth(opac* c, const char* pass, int prompt) {
+static void opacliDoAuth(opacliClient* c, const char* pass, int prompt) {
 	if (prompt && (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO))) {
 		// handle case where user has redirected stdin from a file and wants to type a password in terminal
 #ifdef _WIN32
@@ -625,6 +672,117 @@ static void printResult(const opacReq* req, const char* indent) {
 	OPAFREE(resultStr);
 }
 
+static int opacliClientConnect(opacliClient* clic, const opacliConnectOptions* opts) {
+	int err = 0;
+	// note: the following arrays of callback funcs must be static!
+	static const opacFuncs IOFUNCS = {opacliReadCB, opacliWriteCB, opacliClientErrCB, NULL, NULL, NULL, NULL};
+	static const opatlsioStreamCBs STREAMCBS = {tlssockReadCB, tlssockWriteCB};
+
+	if (!clic->connectedOnce) {
+		clic->useTls = opts->useTLS;
+	}
+
+	opasockInit(&clic->s);
+	opatlsStateInit(&clic->tls);
+	opacInit(&clic->client, &IOFUNCS);
+
+	if (!err) {
+		// TODO: this function should return err code
+		opasockConnect(&clic->s, opts->host, opts->port);
+		if (clic->s.sid == SOCKID_NONE) {
+			if (!clic->connectedOnce) {
+				OPALOGERRF("unable to connect; addr=%s port=%u", opts->host, opts->port);
+				exit(EXIT_FAILURE);
+			} else {
+				return 0;
+			}
+		}
+	}
+
+	// note: there's some funky logic happening below. The intended behavior is as follows:
+	//  - If client is connecting for the first time and the host is determined to be a
+	//    loopback address, then conn is allowed to skip TLS (if useTLS is appropriate level; ie,
+	//    tls-always was not requested)
+	//  - If client is reconnecting, then it must continue to use TLS if TLS was used previously.
+	//    Therefore, the connection cannot drop from using TLS to not using TLS, even if address
+	//    is determined to be loopback.
+
+	if (!err && opts->useTLS == 2 && !clic->connectedOnce && opasockIsLoopback(&clic->s)) {
+		// if connecting to loopback address then don't use TLS. This helps development by avoiding
+		//  cert generation/verification issues when not connecting to different machine over
+		//  network. Note that there may be potential security issues if this machine is being
+		//  used by multiple (untrusted) people/apps at once.
+		clic->useTls = 0;
+		if (opts->printStatus) {
+			printAndFlush(stderr, "Connection to localhost detected. TLS encryption disabled. Use --tls-always if encryption is desired.\n");
+		}
+	}
+
+	// detect the case where the client first connected to a loopback host and was able to avoid using TLS
+	//   but when reconnecting, the host is no longer a loopback address and TLS is now required.
+	if (!err && opts->useTLS == 2 && !clic->useTls && clic->connectedOnce && !opasockIsLoopback(&clic->s)) {
+		clic->useTls = 2;
+	}
+
+	if (clic->useTls && !err) {
+		if (!err) {
+			err = opatlsConfigSetupNewState(&opts->tlscfg, &clic->tls, NULL);
+		}
+		if (!err) {
+			opatlsStateSetCallbackData(&clic->tls, clic, &STREAMCBS);
+		}
+		if (!err) {
+			err = opatlsStateSetExpectedHost(&clic->tls, opts->sni != NULL ? opts->sni : opts->host);
+		}
+		if (!err) {
+			err = opatlsStateHandshake(&clic->tls);
+			if (err) {
+				OPALOGERR("TLS handshake failed");
+			}
+		}
+	}
+
+	if (!err) {
+		if (clic->connectedOnce) {
+			if (clic->authpass != NULL || (opts->istty && opacliIsAuthNeeded(clic))) {
+				opacliDoAuth(clic, clic->authpass, opts->istty);
+			}
+		} else {
+			if (opts->pass != NULL || opts->authp || (opts->istty && opacliIsAuthNeeded(clic))) {
+				opacliDoAuth(clic, opts->pass, opts->istty);
+			}
+		}
+	}
+
+	if (!err) {
+		clic->connectedOnce = 1;
+	} else {
+		opacliClientClose(clic);
+	}
+
+	return err ? 0 : 1;
+}
+
+static void reconnect(opacliClient* clic, const opacliConnectOptions* opts) {
+	unsigned long tries = 0;
+	while (1) {
+		if (opacliClientConnect(clic, opts)) {
+			if (opts->printStatus && tries > 0) {
+				fprintf(stderr, "Reconnected\n");
+			}
+			break;
+		}
+		if (opts->printStatus) {
+			if (tries == 0) {
+				fprintf(stderr, "Disconnected from server. Attempting to reconnect (%s:%d)...\n", opts->host, opts->port);
+			}
+			fprintf(stderr, "%lu\r", tries++);
+			fflush(stderr);
+		}
+		usleep(1000000);
+	}
+}
+
 static int mainInternal(int argc, const char* argv[]) {
 	#ifdef _WIN32
 		opacliWsaStartup();
@@ -634,53 +792,52 @@ static int mainInternal(int argc, const char* argv[]) {
 	#endif
 
 	FILE* src = stdin;
+	char istty = isatty(STDIN_FILENO);
 
 	opacliClient clic = {0};
-	const opacFuncs iofuncs = {opacliReadCB, opacliWriteCB, opacliClientErrCB, NULL, NULL, NULL, NULL};
-
-	opasockInit(&clic.s);
-	opacInit(&clic.client, &iofuncs);
+	opacliConnectOptions connOpts = {
+		.host = DEFAULT_HOST,
+		.sni = NULL,
+		.port = 4567,
+		.useTLS = 2,
+		.istty = istty,
+		.printStatus = istty && isatty(STDERR_FILENO),
+		.authp = 0,
+		.tlscfg = {0}
+	};
 
 	// TODO: features to add:
 	//  option for connect timeout
 	//  option for command response timeout
 	//  support for multi line (if string/array/etc is not finished then continue typing request on next line; or end line with "\" char)
-	//  auto reconnect if conn is closed?
-	//  detect socket close when it happens rather than when sending next request
 	//  strict parsing mode (must quote strings)? json input/output mode?
 
 	int err = 0;
 	const char* binName = argc > 0 ? argv[0] : "";
-	const char* host = DEFAULT_HOST;
-	const char* authPass = NULL;
 	const char* indent = "    ";
 	const char* prompt = "> ";
 	int usercmdIdx = 0;
-	uint16_t port = 4567;
 	char readArgFromStdin = 0;
-	char authPrompt = 0;
-	char istty = isatty(STDIN_FILENO);
 	char useLinenoise = USELINENOISE && istty && isatty(STDOUT_FILENO);
+	char autoReconnect = istty;
 	long interval = 0;
 	long long repeat = 1;
-	char useTLS = 2;
 	const opatlsLib* tlsLib2 = tlsutilsGetDefaultLib();
 	char verifyPeer = 1;
-	const char* sni = NULL;
 	const char* cacert = NULL;
 	const char* cert = NULL;
 	const char* key = NULL;
 	const char* certP12 = NULL;
 	const char* certPass = NULL;
-	opatlsConfig tlscfg;
+	int lastReqWasErr = 0;
 
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
-			host = argv[++i];
+			connOpts.host = argv[++i];
 		} else if (strcmp(argv[i], "-p") == 0 && i + 1 < argc) {
-			port = (uint16_t) argtouir(argv[++i], 1, UINT16_MAX, "-p");
+			connOpts.port = (uint16_t) argtouir(argv[++i], 1, UINT16_MAX, "-p");
 		} else if (strcmp(argv[i], "-a") == 0 && i + 1 < argc) {
-			authPass = argv[++i];
+			connOpts.pass = argv[++i];
 		} else if (strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
 			repeat = strtoll(argv[++i], NULL, 0);
 		} else if (strcmp(argv[i], "-i") == 0 && i + 1 < argc) {
@@ -688,13 +845,13 @@ static int mainInternal(int argc, const char* argv[]) {
 		} else if (strcmp(argv[i], "-x") == 0) {
 			readArgFromStdin = 1;
 		} else if (strcmp(argv[i], "--authp") == 0) {
-			authPrompt = 1;
+			connOpts.authp = 1;
 		} else if (strcmp(argv[i], "--nolinenoise") == 0) {
 			useLinenoise = 0;
 		} else if (strcmp(argv[i], "--indent") == 0 && i + 1 < argc) {
 			indent = argv[++i];
 		} else if (strcmp(argv[i], "--sni") == 0 && i + 1 < argc) {
-			sni = argv[++i];
+			connOpts.sni = argv[++i];
 		} else if (strcmp(argv[i], "--cacert") == 0 && i + 1 < argc) {
 			cacert = argv[++i];
 		} else if (strcmp(argv[i], "--cert") == 0 && i + 1 < argc) {
@@ -708,9 +865,9 @@ static int mainInternal(int argc, const char* argv[]) {
 		} else if (strcmp(argv[i], "--no-verify-peer") == 0) {
 			verifyPeer = 0;
 		} else if (strcmp(argv[i], "--no-tls") == 0) {
-			useTLS = 0;
+			connOpts.useTLS = 0;
 		} else if (strcmp(argv[i], "--tls-always") == 0) {
-			useTLS = 3;
+			connOpts.useTLS = 3;
 		} else if (strcmp(argv[i], "--tls-lib") == 0 && i + 1 < argc) {
 			tlsLib2 = tlsutilsGetLib(argv[i + 1]);
 			if (tlsLib2 == NULL) {
@@ -759,20 +916,23 @@ static int mainInternal(int argc, const char* argv[]) {
 		}
 	}
 
-	if (useTLS && tlsLib2 == NULL) {
+	if (connOpts.useTLS && tlsLib2 == NULL) {
 		fprintf(stderr, "unsupported tls library\n");
 		exit(EXIT_FAILURE);
 	}
 
-	opatlsConfigInit(&tlscfg);
-	opatlsStateInit(&clic.tls);
-	if (useTLS && !err) {
-		clic.useTls = 1;
+	if (usercmdIdx > 0) {
+		autoReconnect = 0;
+		connOpts.printStatus = 0;
+	}
+
+	opatlsConfigInit(&connOpts.tlscfg);
+	if (connOpts.useTLS && !err) {
 		if (!err) {
-			err = opatlsConfigSetup(&tlscfg, tlsLib2, NULL, 0);
+			err = opatlsConfigSetup(&connOpts.tlscfg, tlsLib2, NULL, 0);
 		}
 		if (!err) {
-			err = opatlsConfigVerifyPeer(&tlscfg, verifyPeer);
+			err = opatlsConfigVerifyPeer(&connOpts.tlscfg, verifyPeer);
 		}
 #ifdef OPA_MBEDTLS
 		if (!err && tlsLib2 == &mbedLib && cacert == NULL) {
@@ -780,13 +940,13 @@ static int mainInternal(int argc, const char* argv[]) {
 		}
 #endif
 		if (!err && cacert != NULL) {
-			err = opatlsConfigAddCACertsFile(&tlscfg, cacert);
+			err = opatlsConfigAddCACertsFile(&connOpts.tlscfg, cacert);
 		}
 		if (!err && (cert != NULL && key != NULL)) {
-			err = opatlsConfigUseCert(&tlscfg, cert, key);
+			err = opatlsConfigUseCert(&connOpts.tlscfg, cert, key);
 		}
 		if (!err && certP12 != NULL) {
-			err = opatlsConfigUseCertP12(&tlscfg, certP12, certPass);
+			err = opatlsConfigUseCertP12(&connOpts.tlscfg, certP12, certPass);
 		}
 	}
 
@@ -795,59 +955,10 @@ static int mainInternal(int argc, const char* argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (!err) {
-		// TODO: this function should return err code
-		opasockConnect(&clic.s, host, port);
-		if (clic.s.sid == SOCKID_NONE) {
-			OPALOGERRF("unable to connect; addr=%s port=%u", host, port);
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	if (!err && useTLS == 2 && opasockIsLoopback(&clic.s)) {
-		// if connecting to loopback address then don't use TLS. This helps development by avoiding
-		//  cert generation/verification issues when not connecting to different machine over
-		//  network. Note that there may be potential security issues if this machine is being
-		//  used by multiple (untrusted) people/apps at once.
-		useTLS = 0;
-		// TODO: clear tls initializations
-		tlsLib2 = NULL;
-		clic.useTls = 0;
-		if (istty) {
-			printf("Connection to localhost detected. TLS encryption disabled. Use --tls-always if encryption is desired.\n");
-		}
-	}
-
-	if (useTLS && !err) {
-		if (!err) {
-			err = opatlsConfigSetupNewState(&tlscfg, &clic.tls, NULL);
-		}
-		if (!err) {
-			opatlsStateSetCallbackData(&clic.tls, &clic, &STREAMCBS);
-		}
-		if (!err) {
-			err = opatlsStateSetExpectedHost(&clic.tls, sni != NULL ? sni : host);
-		}
-		if (!err) {
-			err = opatlsStateHandshake(&clic.tls);
-			if (err) {
-				OPALOGERR("TLS handshake failed");
-			}
-		}
-	}
-
-	if (err) {
-		//opasockClose(s);
-		OPALOGERRF("err %d occurred", err);
+	if (!opacliClientConnect(&clic, &connOpts)) {
+		OPALOGERR("error occurred when connecting");
 		exit(EXIT_FAILURE);
 	}
-
-	// detect whether AUTH is required
-	if (!authPrompt && istty && authPass == NULL && usercmdIdx == 0 && opacIsAuthNeeded(&clic.client)) {
-		authPrompt = 1;
-	}
-
-	opacliDoAuth(&clic.client, authPass, authPrompt);
 
 	if (useLinenoise && usercmdIdx > 0) {
 		useLinenoise = 0;
@@ -939,15 +1050,33 @@ static int mainInternal(int argc, const char* argv[]) {
 			continue;
 		}
 
+		if (autoReconnect && !opasockMayRecvMore(&clic.s, 0)) {
+			reconnect(&clic, &connOpts);
+		}
+
 		opacReq req;
 		opacReqInit(&req);
 		opacReqSetRequestBuff(&req, ureq.buff);
-		opacQueueSendRecv(&clic.client, &req);
-		printResult(&req, indent);
+		opacliQueueSendRecv(&clic, &req);
+		if (opacReqResponseRecvd(&req)) {
+			lastReqWasErr = opacReqResponseIsErr(&req);
+			printResult(&req, indent);
+		} else {
+			lastReqWasErr = 1;
+			if (!opacIsOpen(&clic.client)) {
+				printAndFlush(stderr, STR_ERROR "disconnected\n");
+			} else {
+				printAndFlush(stderr, STR_ERROR "response not received\n");
+			}
+		}
 		opacReqFreeResponse(&req);
 
 		if (!opacIsOpen(&clic.client)) {
-			break;
+			if (autoReconnect) {
+				reconnect(&clic, &connOpts);
+			} else {
+				break;
+			}
 		}
 
 		if (usercmdIdx > 0) {
@@ -972,10 +1101,9 @@ static int mainInternal(int argc, const char* argv[]) {
 	if (opatlsStateHandshakeCompleted(&clic.tls)) {
 		opatlsStateNotifyPeerClosing(&clic.tls);
 	}
-	opatlsStateClear(&clic.tls);
-	opatlsConfigClear(&tlscfg);
-	opasockClose(&clic.s);
-	opacClose(&clic.client);
+	opacliClientClose(&clic);
+	freepass(clic.authpass);
+	opatlsConfigClear(&connOpts.tlscfg);
 
 #if defined(OPADBG) && defined(OPAMALLOC)
 #ifdef OPA_OPENSSL
@@ -983,11 +1111,11 @@ static int mainInternal(int argc, const char* argv[]) {
 #endif
 	const opamallocStats* mstats = opamallocGetStats();
 	if (mstats->allocs > 0) {
-		printf("memory leak? allocs: %lu\n", mstats->allocs);
+		fprintf(stderr, "memory leak? allocs: %lu\n", mstats->allocs);
 	}
 #endif
 
-	return 0;
+	return lastReqWasErr ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 #ifdef _WIN32
