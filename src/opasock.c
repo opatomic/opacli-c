@@ -32,7 +32,7 @@
 
 #ifdef _WIN32
 #define OPASOCKLOGERR() LOGWINERRCODE(WSAGetLastError())
-#define MSG_DONTWAIT 0
+typedef int recvres;
 #else
 #ifdef __APPLE__
 // TODO: since apple doesn't have MSG_NOSIGNAL, should use signal(SIGPIPE, SIG_IGN) instead?
@@ -40,6 +40,7 @@
 #endif
 #define OPASOCKLOGERR() LOGSYSERRNO()
 #define closesocket close
+typedef ssize_t recvres;
 #endif
 
 
@@ -151,19 +152,18 @@ int opasockSetNonBlocking(opasock* s, int onOrOff) {
  */
 int opasockMayRecvMore(opasock* s, int isNonBlocking) {
 	char tmp[1];
-#ifdef _WIN32
-	// windows does not have MSG_DONTWAIT flag for recv
+#ifdef __linux__
+	UNUSED(isNonBlocking);
+	recvres result = recv(s->sid, tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+#else
+	// cannot use MSG_DONTWAIT flag for recv
 	if (!isNonBlocking) {
 		int err = opasockSetNonBlocking(s, 1);
 		if (err) {
 			return 1;
 		}
 	}
-#else
-	UNUSED(isNonBlocking);
-#endif
-	ssize_t result = recv(s->sid, tmp, 1, MSG_PEEK | MSG_DONTWAIT);
-#ifdef _WIN32
+	recvres result = recv(s->sid, tmp, 1, MSG_PEEK);
 	if (!isNonBlocking) {
 		int err = opasockSetNonBlocking(s, 0);
 		if (err) {
