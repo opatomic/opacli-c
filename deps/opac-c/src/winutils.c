@@ -16,13 +16,6 @@
 #include "opacore.h"
 #include "winutils.h"
 
-typedef struct {
-	DWORD major;
-	DWORD minor;
-	DWORD build;
-	DWORD platform;
-} winRealVerInfo;
-
 typedef NTSTATUS (__stdcall*RtlGetVersionFunc)(RTL_OSVERSIONINFOW* lpVersionInformation);
 
 static void winGetRealVersionInternal(winRealVerInfo* info) {
@@ -56,13 +49,12 @@ static void winGetRealVersionInternal(winRealVerInfo* info) {
 	}
 }
 
-// TODO: make this function public when it works for all versions of windows?
-static void winGetRealVersion(winRealVerInfo* info) {
+void winGetRealVersion(winRealVerInfo* info) {
 	static int infoLoaded = 0;
 	static winRealVerInfo cachedInfo;
 	if (!infoLoaded) {
-		infoLoaded = 1;
 		winGetRealVersionInternal(&cachedInfo);
+		infoLoaded = 1;
 	}
 	memcpy(info, &cachedInfo, sizeof(cachedInfo));
 }
