@@ -3,7 +3,9 @@
  * Open sourced with ISC license. Refer to LICENSE for details.
  */
 
+#ifdef __linux__
 #define _XOPEN_SOURCE 700
+#endif
 
 #include <stdlib.h>
 #include <stdio.h>
