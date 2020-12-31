@@ -16,7 +16,6 @@
 
 typedef int (*tlsutilsNextCertCB)(void* ctx, const void* buff, size_t len);
 
-int tlsutilsReadFile(const char* path, uint8_t** pBuff, size_t* pLen);
 int tlsutilsIterateCerts(const char* file, void* ctx, tlsutilsNextCertCB cbfunc);
 int tlsutilsLoadPsk(const char* filename, opatlsPsk** ppPsk);
 const opatlsLib* tlsutilsGetDefaultLib(void);

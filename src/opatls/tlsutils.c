@@ -42,49 +42,6 @@
 #include "opatls/tlsutils.h"
 #include "winutils.h"
 
-// read a file into a null terminated string buffer
-int tlsutilsReadFile(const char* path, uint8_t** pBuff, size_t* pLen) {
-	uint8_t* buff = NULL;
-	off_t len = 0;
-	off_t totRead = 0;
-	FILE* f = fopen(path, "rb");
-	if (f == NULL) {
-		goto err;
-	}
-	if (fseeko(f, 0, SEEK_END) != 0) {
-		goto err;
-	}
-	len = ftello(f);
-	if (len < 0) {
-		goto err;
-	}
-	rewind(f);
-
-	buff = OPAMALLOC(len + 1);
-	if (buff == NULL) {
-		goto err;
-	}
-	while (totRead < len) {
-		totRead += fread(buff + totRead, 1, len - totRead, f);
-		if (ferror(f)) {
-			goto err;
-		}
-	}
-	fclose(f);
-	buff[len] = 0;
-	*pBuff = buff;
-	*pLen = len;
-	return 0;
-
-	err:
-	LOGSYSERRNO();
-	if (f != NULL) {
-		fclose(f);
-	}
-	opaZeroAndFree(buff, len);
-	return OPA_ERR_INTERNAL;
-}
-
 static int tlsutilsParseCerts(char* certBuff, void* ctx, tlsutilsNextCertCB cbfunc) {
 	int err = 0;
 	while (!err) {
@@ -132,7 +89,7 @@ static int tlsutilsParseCerts(char* certBuff, void* ctx, tlsutilsNextCertCB cbfu
 int tlsutilsIterateCerts(const char* file, void* ctx, tlsutilsNextCertCB cbfunc) {
 	uint8_t* buff = NULL;
 	size_t buffLen = 0;
-	int err = tlsutilsReadFile(file, &buff, &buffLen);
+	int err = opacoreReadFile(file, &buff, &buffLen);
 	if (!err) {
 		err = tlsutilsParseCerts((char*) buff, ctx, cbfunc);
 	}
@@ -155,7 +112,7 @@ int tlsutilsLoadPsk(const char* filename, opatlsPsk** ppPsk) {
 	opatlsPsk* psk = NULL;
 	uint8_t* buff = NULL;
 	size_t buffLen = 0;
-	int err = tlsutilsReadFile(filename, &buff, &buffLen);
+	int err = opacoreReadFile(filename, &buff, &buffLen);
 	if (!err) {
 		uint8_t* pos = memchr(buff, ':', buffLen);
 		if (pos != NULL) {
