@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && (defined(OPA_SECTRANS) || defined(OPA_MBEDTLS))
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
@@ -21,7 +21,7 @@ int tlsutilsLoadPsk(const char* filename, opatlsPsk** ppPsk);
 const opatlsLib* tlsutilsGetDefaultLib(void);
 const opatlsLib* tlsutilsGetLib(const char* name);
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && (defined(OPA_SECTRANS) || defined(OPA_MBEDTLS))
 #define OSXSECOP(func, ...) osxSecLogIfErr(OPAFUNC, __FILE__, __LINE__, #func, func(__VA_ARGS__))
 void osxRelease(CFTypeRef cf);
 int osxSecLogIfErr(const char* func, const char* filename, int line, const char* osxfunc, OSStatus errcode);
