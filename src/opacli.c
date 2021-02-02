@@ -84,6 +84,9 @@
 // TODO: this error code will be changing
 #define ERR_AUTHREQ -53
 
+#define PPXSTR(a) PPSTR(a)
+#define PPSTR(a) #a
+
 
 typedef struct {
 	opasock s;
@@ -890,7 +893,11 @@ static int mainInternal(int argc, const char* argv[]) {
 			{
 				char tmp[32];
 				mbedtls_version_get_string_full(tmp);
+#ifdef MBEDTLS_GIT_HASH
+				printf("%s (%s)\n", tmp, PPXSTR(MBEDTLS_GIT_HASH));
+#else
 				printf("%s\n", tmp);
+#endif
 			}
 #endif
 			exit(EXIT_SUCCESS);

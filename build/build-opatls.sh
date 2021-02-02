@@ -91,6 +91,7 @@ buildmbedtls() {
 	git clean -fd
 	git checkout -- .
 	git pull
+	OPATLS_DEFS="$OPATLS_DEFS -DMBEDTLS_GIT_HASH=$(git rev-parse HEAD)"
 	cd "$ORIGDIR" || exit 1
 	cp "$MBEDTLS_CONFIG_FILE" "$MBEDTLS_DIR/include/mbedtls/config.h" || exit 1
 	cd "$MBEDTLS_DIR" || exit 1
