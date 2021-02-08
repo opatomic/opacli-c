@@ -19,10 +19,10 @@
 #ifdef OPA_OPENSSL
 #include "opatls/openssl.h"
 #endif
-#ifdef OPA_WINSCHAN
+#if defined(_WIN32) && defined(OPA_WINSCHAN)
 #include "opatls/schan.h"
 #endif
-#ifdef OPA_SECTRANS
+#if defined(__APPLE__) && defined(OPA_SECTRANS)
 #include "opatls/sectrans.h"
 #endif
 #include "opatls/tlsutils.h"
@@ -142,13 +142,13 @@ const opatlsLib* tlsutilsGetLib(const char* name) {
 			}
 		#endif
 	} else if (opaStrCmpNoCaseAscii(name, "schan") == 0) {
-		#ifdef OPA_WINSCHAN
+		#if defined(_WIN32) && defined(OPA_WINSCHAN)
 			if (winIsVerGTE(6, 1) && schanInit()) {
 				lib = &schanLib;
 			}
 		#endif
 	} else if (opaStrCmpNoCaseAscii(name, "sectrans") == 0) {
-		#ifdef OPA_SECTRANS
+		#if defined(__APPLE__) && defined(OPA_SECTRANS)
 			lib = &sectransLib;
 		#endif
 	}
