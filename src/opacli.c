@@ -1057,7 +1057,7 @@ static int mainInternal(int argc, const char* argv[]) {
 			continue;
 		}
 
-		if (autoReconnect && !opasockMayRecvMore(&clic.s, 0)) {
+		if (autoReconnect && (!opacIsOpen(&clic.client) || !opasockMayRecvMore(&clic.s, 0))) {
 			reconnect(&clic, &connOpts);
 		}
 
