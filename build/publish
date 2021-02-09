@@ -82,7 +82,7 @@ if [ "$UNAME" = "linux" ]; then
 	mv out/opacli "out/opacli-$VERSION-win64.exe"
 elif [ "$UNAME" = "darwin" ]; then
 	CFLAGS="-Os -flto -march=x86-64 -mmacosx-version-min=10.9" LDFLAGS="-flto -march=x86-64 -mmacosx-version-min=10.9" ./build
-	mv out/opacli "out/opacli-$VERSION-mac_osx-x86_64"
+	mv out/opacli "out/opacli-$VERSION-macos-x86_64"
 fi
 
 rm out/opacli-debug
