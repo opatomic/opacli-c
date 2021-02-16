@@ -825,7 +825,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	char autoReconnect = istty;
 	long interval = 0;
 	long long repeat = 1;
-	const opatlsLib* tlsLib2 = tlsutilsGetDefaultLib();
+	const opatlsLib* tlsLib2 = NULL;
 	char verifyPeer = 1;
 	const char* cacert = NULL;
 	const char* cert = NULL;
@@ -924,8 +924,11 @@ static int mainInternal(int argc, const char* argv[]) {
 	}
 
 	if (connOpts.useTLS && tlsLib2 == NULL) {
-		fprintf(stderr, "unsupported tls library\n");
-		exit(EXIT_FAILURE);
+		tlsLib2 = tlsutilsGetDefaultLib();
+		if (tlsLib2 == NULL) {
+			fprintf(stderr, "cannot load default tls library\n");
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	if (usercmdIdx > 0) {
