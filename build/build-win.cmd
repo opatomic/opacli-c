@@ -25,9 +25,11 @@ if "%VCInstallDir%"=="" (
 )
 
 
+set ERRCODE=0
 set SRCDIR=%cd%\..\src
 set TMPDIR=%cd%\tmp
 set OUTDIR=%cd%\out
+set DEPDIR=%cd%\dep
 set LIBTOMDIR=%cd%\..\deps\libtommath
 
 
@@ -50,6 +52,7 @@ set MSVCWARN=-W4 -wd4204
 if exist %TMPDIR% rmdir /S /Q %TMPDIR%
 if not exist %TMPDIR% mkdir %TMPDIR%
 if not exist %OUTDIR% mkdir %OUTDIR%
+if not exist %TMPDIR% mkdir %TMPDIR%
 if exist %OUTDIR%\opacli.exe del %OUTDIR%\opacli.exe
 
 
@@ -73,17 +76,22 @@ rmdir /S /Q %TMPDIR%\libtommath
 ::rmdir /S /Q %TMPDIR%\libtommath
 
 
-set /p OPACVER=<..\deps\opac-c\build\version.txt
+set OPAC_VERSION=0.1.46
 set /p OPACLIVER=<version.txt
 :: TODO: if git is installed, and this directory is a proper git repo, determine whether the source
 ::   is modified and if not then assign a proper version string (without -win or -dev appended)
 set OPACLIVER=%OPACLIVER%-win-dev
 :: note: if compiling with threads support: add -D_AMD64_ to allow including synchapi.h rather than windows.h in opamutex.h
-set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0500 -DWINVER=0x0500 -DOPA_NOTHREADS -DOPAC_VERSION=\"%OPACVER%\" -DOPACLI_VERSION=\"%OPACLIVER%\" -DOPABIGINT_USE_LTM
+set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0500 -DWINVER=0x0500 -DOPA_NOTHREADS -DOPAC_VERSION=\"%OPAC_VERSION%\" -DOPACLI_VERSION=\"%OPACLIVER%\" -DOPABIGINT_USE_LTM
 set INCS="-I%LIBTOMDIR%"
 
-call :BuildDir ..\deps\opac-c\src\*.c %TMPDIR%
-set INCS=%INCS% "-I%cd%\..\deps\opac-c\src"
+call :GitCloneTag https://github.com/opatomic/opac-c.git %DEPDIR%\opac-c v%OPAC_VERSION%
+if not %ERRCODE%==0 (
+	if defined standalone pause
+	exit /b %ERRCODE%
+)
+call :BuildDir %DEPDIR%\opac-c\src\*.c %TMPDIR%
+set INCS=%INCS% "-I%DEPDIR%\opac-c\src"
 set INCS=%INCS% "-I%SRCDIR%"
 call :BuildDir ..\src\*.c %TMPDIR%
 call :BuildDir ..\src\opatls\*.c %TMPDIR%
@@ -106,6 +114,23 @@ if defined standalone pause
 exit /b %ERRCODE%
 
 
+
+:GitCloneTag (
+	if not exist %2\ (
+		git clone %1 %2
+	)
+	pushd %2
+	:: TODO: only fetch/checkout if needed
+	git fetch
+	git checkout tags/%3
+	for /F "tokens=* USEBACKQ" %%i in (`git status --porcelain`) do (set GITSTATUS=%%i)
+	if not "%GITSTATUS%"=="" (
+		echo error: There are changes to %2 project. Must revert or check in changes.
+		set ERRCODE=1
+	)
+	popd
+	goto :EOF
+)
 
 :InitMSVC (
 	if "%VCInstallDir%"=="" (
