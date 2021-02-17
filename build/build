@@ -39,12 +39,34 @@ TMPDIR="$PWD/tmp"
 OUTDIR="$PWD/out"
 DEPDIR="$PWD/dep"
 
+OPAC_VERSION="${OPAC_VERSION:-0.1.46}"
 OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
 MBEDTLS_DIR="$DEPDIR/mbedtls"
 MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.16}"
 MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
 
-. "../deps/opac-c/build/opabuildutil.sh"
+
+# args: gitRepoUrl destDir tagToCheckout
+gitCloneTag() {
+	if [ ! -d "$2" ]; then
+		git clone "$1" "$2"
+	fi
+	ORIGDIR="$PWD"
+	cd "$2" || exit 1
+	if [ "$(git describe --tags --dirty 2> /dev/null)" != "$3" ]; then
+		git fetch
+		git checkout "tags/$3"
+	fi
+	MODCNT=$(git status --porcelain | wc -l)
+	if [ "$MODCNT" -ne 0 ]; then
+		echo "error: There are $MODCNT changes to $1 dep project. Must revert or check in changes." >&2
+		exit 1
+	fi
+	cd "$ORIGDIR" || exit 1
+}
+
+gitCloneTag "https://github.com/opatomic/opac-c.git" "$DEPDIR/opac-c" "v$OPAC_VERSION"
+. "$DEPDIR/opac-c/build/opabuildutil.sh"
 
 #if [[ ! ($TGTOS == "linux" || $TGTOS == "win" || $TGTOS == "darwin" ) ]]; then
 #	echo "$TGTOS not supported; must set \$TGTOS properly"
@@ -128,11 +150,11 @@ elif [ "$OPABIGINT_LIB" = "LTM" ]; then
 	INCS="$INCS -I../deps/libtommath"
 fi
 
-OPACVER=$(cat ../deps/opac-c/build/version.txt) || exit 1
+OPACVER=$(cat $DEPDIR/opac-c/build/version.txt) || exit 1
 DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
-builddir "../deps/opac-c/src" "$TMPDIR"
+builddir "$DEPDIR/opac-c/src" "$TMPDIR"
 
-INCS="-I$PWD/../deps/opac-c/src -I$PWD/../deps/linenoise -I$SRCDIR/"
+INCS="-I$DEPDIR/opac-c/src -I$PWD/../deps/linenoise -I$SRCDIR/"
 if [ "$OPA_MBEDTLS" != "0" ] || [ "$OPABIGINT_LIB" = "mbedtls" ]; then
 	INCS="$INCS -I$MBEDTLS_DIR/include"
 fi
@@ -141,7 +163,7 @@ builddir "$SRCDIR" "$TMPDIR"
 builddir "$SRCDIR/opatls" "$TMPDIR"
 
 CFLAGS="$CFLAGS $(testgccopt -fno-lto)"
-buildcfile "../deps/opac-c/build/wrapmemcpy.c" "$TMPDIR"
+buildcfile "$DEPDIR/opac-c/build/wrapmemcpy.c" "$TMPDIR"
 
 echo "linking opacli..."
 cd "$TMPDIR" || exit 1
