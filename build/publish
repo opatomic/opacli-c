@@ -77,9 +77,11 @@ if [ "$UNAME" = "linux" ]; then
 	CCACHE="" CFLAGS="-flto -march=i386 -m32" LDFLAGS="-flto -march=i386 -m32 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 	mv out/opacli "out/opacli-$VERSION-linux-x86"
 	CCACHE="" CC="i686-w64-mingw32-gcc" AR="i686-w64-mingw32-ar" TGTOS=win ./build
-	mv out/opacli "out/opacli-$VERSION-win32.exe"
+	mv out/opacli.exe "out/opacli-$VERSION-win32.exe"
 	CCACHE="" CC="x86_64-w64-mingw32-gcc" AR="x86_64-w64-mingw32-ar" TGTOS=win ./build
-	mv out/opacli "out/opacli-$VERSION-win64.exe"
+	mv out/opacli.exe "out/opacli-$VERSION-win64.exe"
+
+	rm out/opacli-debug.exe
 elif [ "$UNAME" = "darwin" ]; then
 	CCACHE="" CFLAGS="-Os -flto -march=x86-64 -mmacosx-version-min=10.9" LDFLAGS="-flto -march=x86-64 -mmacosx-version-min=10.9" ./build
 	mv out/opacli "out/opacli-$VERSION-macos-x86_64"

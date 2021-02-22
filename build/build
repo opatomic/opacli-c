@@ -168,12 +168,8 @@ buildcfile "$DEPDIR/opac-c/build/wrapmemcpy.c" "$TMPDIR"
 echo "linking opacli..."
 cd "$TMPDIR" || exit 1
 FLIST="$(ls ./*.o | sort)"
-$CC $LDFLAGS $OPATLS_LDFLAGS -o "$OUTDIR/opacli-debug" $FLIST $LNLIBS $OPATLS_LNLIBS
-if [ "$OS" = "Windows_NT" ]; then
-	# running mingw on windows: appends .exe to output filename
-	strip $STRIPALLFLAG -o "$OUTDIR/opacli.exe" "$OUTDIR/opacli-debug.exe"
-else
-	strip $STRIPALLFLAG -o "$OUTDIR/opacli" "$OUTDIR/opacli-debug"
-fi
+[ "$TGTOS" = "win" ] && EXEEXT=".exe" || EXEEXT=""
+$CC $LDFLAGS $OPATLS_LDFLAGS -o "$OUTDIR/opacli-debug$EXEEXT" $FLIST $LNLIBS $OPATLS_LNLIBS
+strip $STRIPALLFLAG -o "$OUTDIR/opacli$EXEEXT" "$OUTDIR/opacli-debug$EXEEXT"
 
 rm -rf "${TMPDIR:?}/"*
