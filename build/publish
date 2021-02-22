@@ -72,16 +72,16 @@ rm -rf out/*
 
 UNAME="${UNAME:-$(uname | tr '[:upper:]' '[:lower:]')}"
 if [ "$UNAME" = "linux" ]; then
-	CFLAGS="-flto -march=x86-64" LDFLAGS="-flto -march=x86-64 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
+	CCACHE="" CFLAGS="-flto -march=x86-64" LDFLAGS="-flto -march=x86-64 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 	mv out/opacli "out/opacli-$VERSION-linux-x86_64"
-	CFLAGS="-flto -march=i386 -m32" LDFLAGS="-flto -march=i386 -m32 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
+	CCACHE="" CFLAGS="-flto -march=i386 -m32" LDFLAGS="-flto -march=i386 -m32 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 	mv out/opacli "out/opacli-$VERSION-linux-x86"
-	CC="i686-w64-mingw32-gcc" AR="i686-w64-mingw32-ar" TGTOS=win ./build
+	CCACHE="" CC="i686-w64-mingw32-gcc" AR="i686-w64-mingw32-ar" TGTOS=win ./build
 	mv out/opacli "out/opacli-$VERSION-win32.exe"
-	CC="x86_64-w64-mingw32-gcc" AR="x86_64-w64-mingw32-ar" TGTOS=win ./build
+	CCACHE="" CC="x86_64-w64-mingw32-gcc" AR="x86_64-w64-mingw32-ar" TGTOS=win ./build
 	mv out/opacli "out/opacli-$VERSION-win64.exe"
 elif [ "$UNAME" = "darwin" ]; then
-	CFLAGS="-Os -flto -march=x86-64 -mmacosx-version-min=10.9" LDFLAGS="-flto -march=x86-64 -mmacosx-version-min=10.9" ./build
+	CCACHE="" CFLAGS="-Os -flto -march=x86-64 -mmacosx-version-min=10.9" LDFLAGS="-flto -march=x86-64 -mmacosx-version-min=10.9" ./build
 	mv out/opacli "out/opacli-$VERSION-macos-x86_64"
 fi
 
