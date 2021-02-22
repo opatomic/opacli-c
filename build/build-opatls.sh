@@ -96,6 +96,6 @@ buildmbedtls() {
 	cp "$MBEDTLS_CONFIG_FILE" "$MBEDTLS_DIR/include/mbedtls/config.h" || exit 1
 	cd "$MBEDTLS_DIR" || exit 1
 	make clean
-	make CFLAGS="$CFLAGS" -j $NPROC lib
+	make CC="$CCACHE $CC" CFLAGS="$CFLAGS" -j $NPROC lib
 	cd "$ORIGDIR" || exit 1
 }
