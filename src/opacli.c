@@ -786,6 +786,22 @@ static void reconnect(opacliClient* clic, const opacliConnectOptions* opts) {
 	}
 }
 
+static int reqIsCommand(const oparb* rb, const char* cmd) {
+	const uint8_t* buff = opabuffGetPos(&rb->buff, 0);
+	if (*buff == OPADEF_ARRAY_START) {
+		++buff;
+		if (*buff != OPADEF_ARRAY_END) {
+			buff += opasolen(buff);
+			size_t strLen;
+			int err = opasoGetStrOrBin(buff, &buff, &strLen);
+			if (!err) {
+				return opaStrCmpNoCaseAsciiLen(buff, strLen, cmd, strlen(cmd)) == 0;
+			}
+		}
+	}
+	return 0;
+}
+
 static int mainInternal(int argc, const char* argv[]) {
 	#ifdef _WIN32
 		opacliWsaStartup();
@@ -1035,10 +1051,6 @@ static int mainInternal(int argc, const char* argv[]) {
 			exit(EXIT_FAILURE);
 		}
 
-		if (opaStrCmpNoCaseAscii(line, "quit") == 0 || opaStrCmpNoCaseAscii(line, "exit") == 0) {
-			break;
-		}
-
 		if (line[strspn(line, " \t\r\n")] == 0) {
 			// skip empty line (contains only whitespace)
 			continue;
@@ -1058,6 +1070,11 @@ static int mainInternal(int argc, const char* argv[]) {
 				break;
 			}
 			continue;
+		}
+
+		if (reqIsCommand(&ureq, "quit") || reqIsCommand(&ureq, "exit")) {
+			opabuffFree(&ureq.buff);
+			break;
 		}
 
 		if (autoReconnect && (!opacIsOpen(&clic.client) || !opasockMayRecvMore(&clic.s, 0))) {
