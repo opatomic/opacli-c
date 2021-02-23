@@ -1076,6 +1076,7 @@ static int mainInternal(int argc, const char* argv[]) {
 			opabuffFree(&ureq.buff);
 			break;
 		}
+		int isShutdown = reqIsCommand(&ureq, "shutdown");
 
 		if (autoReconnect && (!opacIsOpen(&clic.client) || !opasockMayRecvMore(&clic.s, 0))) {
 			reconnect(&clic, &connOpts);
@@ -1091,7 +1092,9 @@ static int mainInternal(int argc, const char* argv[]) {
 		} else {
 			lastReqWasErr = 1;
 			if (!opacIsOpen(&clic.client)) {
-				printAndFlush(stderr, STR_ERROR "disconnected\n");
+				if (!isShutdown) {
+					printAndFlush(stderr, STR_ERROR "disconnected\n");
+				}
 			} else {
 				printAndFlush(stderr, STR_ERROR "response not received\n");
 			}
