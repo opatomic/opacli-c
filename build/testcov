@@ -3,11 +3,11 @@
 
 SRCDIR="$PWD/../src"
 DEPSDIR="../deps"
+DEPDIR="$PWD/dep"
 TMPDIR="tmp"
 
-. "$DEPSDIR/opac-c/build/opabuildutil.sh"
+. "$DEPDIR/opac-c/build/opabuildutil.sh"
 
-DEPDIR="$PWD/dep"
 MBEDTLS_DIR="$DEPDIR/mbedtls"
 MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.16}"
 MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
@@ -21,7 +21,7 @@ LDFLAGS="-g -fprofile-arcs -ftest-coverage $LDFLAGS"
 ensuredir "$TMPDIR"
 rm -rf "${TMPDIR:?}/"*
 
-cp "$DEPSDIR/opac-c/src/"* "$TMPDIR"
+cp "$DEPDIR/opac-c/src/"* "$TMPDIR"
 cp "../src/"* "$TMPDIR"
 cp "../src/opatls/"*.c "$TMPDIR"
 
