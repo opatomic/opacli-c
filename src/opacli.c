@@ -1133,7 +1133,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	}
 	opacliClientClose(&clic);
 	freepass(clic.authpass);
-	opatlsConfigClear(&connOpts.tlscfg);
+	opatlsConfigRemRef(&connOpts.tlscfg);
 
 #if defined(OPADBG) && defined(OPAMALLOC)
 #ifdef OPA_OPENSSL

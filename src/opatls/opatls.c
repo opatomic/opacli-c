@@ -84,8 +84,8 @@ const opatlsLib noneLib = {
 
 
 static const opatlsStateFuncs* opatlsStateGetFuncs(const opatlsState* ts) {
-	OASSERT(ts->lib != NULL);
-	return ts->lib->stateFuncs;
+	OASSERT(ts->cfg != NULL && ts->cfg->lib != NULL);
+	return ts->cfg->lib->stateFuncs;
 }
 
 void opatlsStateInit(opatlsState* ts) {
@@ -141,7 +141,7 @@ int opatlsStateNotifyPeerClosing(opatlsState* ts) {
 }
 
 void opatlsStateClear(opatlsState* ts) {
-	if (ts == NULL || ts->lib == NULL) {
+	if (ts == NULL || ts->cfg == NULL) {
 		return;
 	}
 
@@ -149,6 +149,7 @@ void opatlsStateClear(opatlsState* ts) {
 	if (ts->allocd) {
 		OPAFREE(ts->libData);
 	}
+	opatlsConfigRemRef(ts->cfg);
 	memset(ts, 0, sizeof(opatlsState));
 }
 
@@ -180,6 +181,7 @@ int opatlsConfigSetup(opatlsConfig* tc, const opatlsLib* lib, void* libData, int
 		tc->allocd = allocd;
 		tc->lib = lib;
 		tc->libData2 = libData;
+		tc->refs = 1;
 	} else {
 		if (allocd) {
 			OPAFREE(libData);
@@ -189,27 +191,69 @@ int opatlsConfigSetup(opatlsConfig* tc, const opatlsLib* lib, void* libData, int
 }
 
 int opatlsConfigAddCACertsFile(opatlsConfig* tc, const char* filepath) {
+	if (tc->locked) {
+		return OPA_ERR_INVSTATE;
+	}
 	return opatlsCfgGetFuncs(tc)->addCACertsFile(opatlsCfgGetData(tc), filepath);
 }
 
 int opatlsConfigUseCert(opatlsConfig* tc, const char* certPath, const char* keyPath) {
+	if (tc->locked) {
+		return OPA_ERR_INVSTATE;
+	}
 	return opatlsCfgGetFuncs(tc)->useCert(opatlsCfgGetData(tc), certPath, keyPath);
 }
 
 int opatlsConfigUseCertP12(opatlsConfig* tc, const char* certPath, const char* pass) {
+	if (tc->locked) {
+		return OPA_ERR_INVSTATE;
+	}
 	return opatlsCfgGetFuncs(tc)->useCertP12(opatlsCfgGetData(tc), certPath, pass);
 }
 
 int opatlsConfigVerifyPeer(opatlsConfig* tc, int verify) {
+	if (tc->locked) {
+		return OPA_ERR_INVSTATE;
+	}
 	return opatlsCfgGetFuncs(tc)->verifyPeer(opatlsCfgGetData(tc), verify);
 }
 
-void opatlsConfigClear(opatlsConfig* tc) {
+static void opatlsConfigClear(opatlsConfig* tc) {
 	opatlsCfgGetFuncs(tc)->clear(opatlsCfgGetData(tc));
 	if (tc->allocd) {
 		OPAFREE(tc->libData2);
 	}
 	memset(tc, 0, sizeof(opatlsConfig));
+}
+
+#ifdef OPA_NOTHREADS
+#define ATOMIC_INC(v) (++(*(v)))
+#define ATOMIC_DEC(v) (--(*(v)))
+#else
+#ifdef _MSC_VER
+#define ATOMIC_INC(v) InterlockedIncrement((LONG volatile *) (v))
+#define ATOMIC_DEC(v) InterlockedDecrement((LONG volatile *) (v))
+#elif defined(__GNUC__)
+#define ATOMIC_INC(v) __sync_add_and_fetch((v), 1)
+#define ATOMIC_DEC(v) __sync_sub_and_fetch((v), 1)
+#endif
+#endif
+
+void opatlsConfigAddRef(const opatlsConfig* tc) {
+	if (tc != NULL) {
+		long res = ATOMIC_INC(&((opatlsConfig*)tc)->refs);
+		OASSERT(res > 0);
+	}
+}
+
+void opatlsConfigRemRef(const opatlsConfig* tc) {
+	if (tc != NULL) {
+		long res = ATOMIC_DEC(&((opatlsConfig*)tc)->refs);
+		OASSERT(res + 1 != 0);
+		if (res == 0) {
+			opatlsConfigClear((opatlsConfig*)tc);
+		}
+	}
 }
 
 int opatlsConfigSetupNewState(const opatlsConfig* tc, opatlsState* state, void* stateData) {
@@ -223,9 +267,15 @@ int opatlsConfigSetupNewState(const opatlsConfig* tc, opatlsState* state, void* 
 	}
 	int err = opatlsCfgGetFuncs(tc)->initState(tc->libData2, stateData);
 	if (!err) {
+		if (!tc->locked) {
+			// when a new opatlsState object is created, the config cannot change anymore because
+			// the state object may refer back to the config object's data structures (see mbedtls_ssl_setup() docs).
+			((opatlsConfig*)tc)->locked = 1;
+		}
+		opatlsConfigAddRef(tc);
 		memset(state, 0, sizeof(opatlsState));
 		state->allocd = allocd;
-		state->lib = tc->lib;
+		state->cfg = tc;
 		state->libData = stateData;
 	} else {
 		if (allocd) {

@@ -109,10 +109,12 @@ typedef struct {
 	const opatlsStateFuncs* stateFuncs;
 } opatlsLib;
 
+typedef struct opatlsConfig_s opatlsConfig;
+
 typedef struct {
 	char hsDone;
 	char allocd;
-	const opatlsLib* lib;
+	const opatlsConfig* cfg;
 	void* libData;
 } opatlsState;
 
@@ -130,11 +132,13 @@ int opatlsStateNotifyPeerClosing(opatlsState* ts);
 void opatlsStateClear(opatlsState* ts);
 
 
-typedef struct {
+struct opatlsConfig_s {
 	char allocd;
+	char locked;
+	unsigned long refs;
 	const opatlsLib* lib;
 	void* libData2;
-} opatlsConfig;
+};
 
 void opatlsConfigInit(opatlsConfig* tc);
 int opatlsConfigSetup(opatlsConfig* tc, const opatlsLib* lib, void* libData, int isServer);
@@ -142,7 +146,8 @@ int opatlsConfigAddCACertsFile(opatlsConfig* tc, const char* filepath);
 int opatlsConfigUseCert(opatlsConfig* tc, const char* certPath, const char* keyPath);
 int opatlsConfigUseCertP12(opatlsConfig* tc, const char* certPath, const char* pass);
 int opatlsConfigVerifyPeer(opatlsConfig* tc, int verify);
-void opatlsConfigClear(opatlsConfig* tc);
+void opatlsConfigAddRef(const opatlsConfig* tc);
+void opatlsConfigRemRef(const opatlsConfig* tc);
 
 int opatlsConfigSetupNewState(const opatlsConfig* tc, opatlsState* state, void* stateData);
 
