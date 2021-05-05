@@ -107,7 +107,7 @@ typedef struct {
 	char istty;
 	char printStatus;
 	char authp;
-	opatlsConfig tlscfg;
+	opatlsConfig* tlscfg;
 } opacliConnectOptions;
 
 
@@ -729,7 +729,7 @@ static int opacliClientConnect(opacliClient* clic, const opacliConnectOptions* o
 
 	if (clic->useTls && !err) {
 		if (!err) {
-			err = opatlsConfigSetupNewState(&opts->tlscfg, &clic->tls, NULL);
+			err = opatlsConfigSetupNewState(opts->tlscfg, &clic->tls, NULL);
 		}
 		if (!err) {
 			opatlsStateSetCallbackData(&clic->tls, clic, &STREAMCBS);
@@ -822,7 +822,7 @@ static int mainInternal(int argc, const char* argv[]) {
 		.istty = istty,
 		.printStatus = istty && isatty(STDERR_FILENO),
 		.authp = 0,
-		.tlscfg = {0}
+		.tlscfg = NULL
 	};
 
 	// TODO: features to add:
@@ -952,13 +952,10 @@ static int mainInternal(int argc, const char* argv[]) {
 		connOpts.printStatus = 0;
 	}
 
-	opatlsConfigInit(&connOpts.tlscfg);
 	if (connOpts.useTLS && !err) {
+		err = opatlsConfigNew(tlsLib2, 0, &connOpts.tlscfg);
 		if (!err) {
-			err = opatlsConfigSetup(&connOpts.tlscfg, tlsLib2, NULL, 0);
-		}
-		if (!err) {
-			err = opatlsConfigVerifyPeer(&connOpts.tlscfg, verifyPeer);
+			err = opatlsConfigVerifyPeer(connOpts.tlscfg, verifyPeer);
 		}
 #ifdef OPA_MBEDTLS
 		if (!err && tlsLib2 == &mbedLib && cacert == NULL) {
@@ -966,13 +963,13 @@ static int mainInternal(int argc, const char* argv[]) {
 		}
 #endif
 		if (!err && cacert != NULL) {
-			err = opatlsConfigAddCACertsFile(&connOpts.tlscfg, cacert);
+			err = opatlsConfigAddCACertsFile(connOpts.tlscfg, cacert);
 		}
 		if (!err && (cert != NULL && key != NULL)) {
-			err = opatlsConfigUseCert(&connOpts.tlscfg, cert, key);
+			err = opatlsConfigUseCert(connOpts.tlscfg, cert, key);
 		}
 		if (!err && certP12 != NULL) {
-			err = opatlsConfigUseCertP12(&connOpts.tlscfg, certP12, certPass);
+			err = opatlsConfigUseCertP12(connOpts.tlscfg, certP12, certPass);
 		}
 	}
 
@@ -1133,7 +1130,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	}
 	opacliClientClose(&clic);
 	freepass(clic.authpass);
-	opatlsConfigRemRef(&connOpts.tlscfg);
+	opatlsConfigRemRef(connOpts.tlscfg);
 
 #if defined(OPADBG) && defined(OPAMALLOC)
 #ifdef OPA_OPENSSL

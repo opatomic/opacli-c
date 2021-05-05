@@ -132,16 +132,7 @@ int opatlsStateNotifyPeerClosing(opatlsState* ts);
 void opatlsStateClear(opatlsState* ts);
 
 
-struct opatlsConfig_s {
-	char allocd;
-	char locked;
-	unsigned long refs;
-	const opatlsLib* lib;
-	void* libData2;
-};
-
-void opatlsConfigInit(opatlsConfig* tc);
-int opatlsConfigSetup(opatlsConfig* tc, const opatlsLib* lib, void* libData, int isServer);
+int opatlsConfigNew(const opatlsLib* lib, int isServer, opatlsConfig** pNewCfg);
 int opatlsConfigAddCACertsFile(opatlsConfig* tc, const char* filepath);
 int opatlsConfigUseCert(opatlsConfig* tc, const char* certPath, const char* keyPath);
 int opatlsConfigUseCertP12(opatlsConfig* tc, const char* certPath, const char* pass);

@@ -8,6 +8,12 @@
 #include "opacore.h"
 #include "opatls/opatls.h"
 
+struct opatlsConfig_s {
+	char locked;
+	unsigned long refs;
+	const opatlsLib* lib;
+};
+
 struct opatlsPsk_s {
 	unsigned int keyLen;
 	unsigned int idLen;
@@ -158,34 +164,27 @@ static const opatlsCfgFuncs* opatlsCfgGetFuncs(const opatlsConfig* tc) {
 }
 
 static void* opatlsCfgGetData(const opatlsConfig* tc) {
-	return tc->libData2;
+	return (void*) (tc + 1);
 }
 
-void opatlsConfigInit(opatlsConfig* tc) {
-	memset(tc, 0, sizeof(opatlsConfig));
-	tc->lib = &noneLib;
-}
-
-int opatlsConfigSetup(opatlsConfig* tc, const opatlsLib* lib, void* libData, int isServer) {
-	char allocd = 0;
-	if (libData == NULL && lib->cfgDataLen > 0) {
-		libData = OPACALLOC(lib->cfgDataLen, 1);
-		if (libData == NULL) {
-			return OPA_ERR_NOMEM;
-		}
-		allocd = 1;
+int opatlsConfigNew(const opatlsLib* lib, int isServer, opatlsConfig** pNewCfg) {
+	if (lib == NULL) {
+		return OPA_ERR_INVARG;
 	}
 
-	int err = lib->cfgFuncs->setup(libData, isServer);
+	opatlsConfig* tc = OPACALLOC(1, sizeof(opatlsConfig) + lib->cfgDataLen);
+	if (tc == NULL) {
+		return OPA_ERR_NOMEM;
+	}
+
+	tc->lib = lib;
+	tc->refs = 1;
+
+	int err = lib->cfgFuncs->setup(opatlsCfgGetData(tc), isServer);
 	if (!err) {
-		tc->allocd = allocd;
-		tc->lib = lib;
-		tc->libData2 = libData;
-		tc->refs = 1;
+		*pNewCfg = tc;
 	} else {
-		if (allocd) {
-			OPAFREE(libData);
-		}
+		OPAFREE(tc);
 	}
 	return err;
 }
@@ -220,10 +219,8 @@ int opatlsConfigVerifyPeer(opatlsConfig* tc, int verify) {
 
 static void opatlsConfigClear(opatlsConfig* tc) {
 	opatlsCfgGetFuncs(tc)->clear(opatlsCfgGetData(tc));
-	if (tc->allocd) {
-		OPAFREE(tc->libData2);
-	}
 	memset(tc, 0, sizeof(opatlsConfig));
+	OPAFREE(tc);
 }
 
 #ifdef OPA_NOTHREADS
@@ -265,7 +262,7 @@ int opatlsConfigSetupNewState(const opatlsConfig* tc, opatlsState* state, void* 
 		}
 		allocd = 1;
 	}
-	int err = opatlsCfgGetFuncs(tc)->initState(tc->libData2, stateData);
+	int err = opatlsCfgGetFuncs(tc)->initState(opatlsCfgGetData(tc), stateData);
 	if (!err) {
 		if (!tc->locked) {
 			// when a new opatlsState object is created, the config cannot change anymore because
