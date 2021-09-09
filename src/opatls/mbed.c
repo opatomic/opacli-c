@@ -199,7 +199,6 @@ const char* mbedGetDefaultCAPath(void) {
 	// which windows system store to use here? why ROOT rather than CA? some cases that need to use several combined at once?
 	return MBED_SYSCERTSTORE_PREFIX "ROOT";
 #elif defined(__APPLE__)
-		// which windows system store to use here? why ROOT rather than CA? some cases that need to use several combined at once?
 	return MBED_SYSCERTSTORE_PREFIX "/System/Library/Keychains/SystemRootCertificates.keychain";
 #else
 	return NULL;
