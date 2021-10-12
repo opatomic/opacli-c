@@ -225,6 +225,19 @@ int mbedCfgInit(mbedCfg* cfg, int isServer) {
 	return err;
 }
 
+static int addnextcert(void* ctx, const void* buff, size_t len) {
+	mbedCfg* cfg = ctx;
+	int mbederr = mbedtls_x509_crt_parse_der(&cfg->mbedcacert, buff, len);
+	if (mbederr) {
+		// TODO: handle more error codes here?
+		if (mbederr == MBEDTLS_ERR_X509_ALLOC_FAILED) {
+			return OPA_ERR_NOMEM;
+		}
+		//OPALOG("err when adding CA cert");
+	}
+	return 0;
+}
+
 int mbedCfgAddCACertsFile(mbedCfg* cfg, const char* filepath) {
 #ifdef _WIN32
 	if (startsWith(filepath, MBED_SYSCERTSTORE_PREFIX)) {
@@ -238,8 +251,9 @@ int mbedCfgAddCACertsFile(mbedCfg* cfg, const char* filepath) {
 #endif
 	// TODO: log if some certs were not parsed properly? (this can indicate that mbedtls was not compiled with support
 	//   for things such as sha-1, sha-512, specific ec curves, etc)
-	mbedtls_x509_crt_parse_file(&cfg->mbedcacert, filepath);
-	return 0;
+
+	// note: mbedtls_x509_crt_parse_file() is slow in mbedtls now. see https://github.com/ARMmbed/mbedtls/issues/4814
+	return tlsutilsIterateCerts(filepath, cfg, addnextcert);
 }
 
 int mbedCfgUseCert(mbedCfg* cfg, const char* cert, const char* key) {
