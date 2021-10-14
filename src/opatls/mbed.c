@@ -126,7 +126,7 @@ static int mbedtlsAddWinSysCerts(mbedtls_x509_crt* chain, const char* systemStor
 }
 #endif
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)
 static int mbedtlsAddOSXKeychainCerts(mbedtls_x509_crt* chain, const char* path) {
 	int err = 0;
 	int attempted = 0;
