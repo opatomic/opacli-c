@@ -782,12 +782,22 @@ static int reqIsCommand(const oparb* rb, const char* cmd) {
 	return 0;
 }
 
+#if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
+static void* opacliMbedCalloc(size_t nmemb, size_t sz) {
+	return OPACALLOC(nmemb, sz);
+}
+
+static void opacliMbedFree(void* ptr) {
+	OPAFREE(ptr);
+}
+#endif
+
 static int mainInternal(int argc, const char* argv[]) {
 	#ifdef _WIN32
 		opacliWsaStartup();
 	#endif
 	#if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
-		mbedtls_platform_set_calloc_free(OPACALLOC, OPAFREE);
+		mbedtls_platform_set_calloc_free(opacliMbedCalloc, opacliMbedFree);
 	#endif
 
 	FILE* src = stdin;
