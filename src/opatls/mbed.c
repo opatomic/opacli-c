@@ -16,7 +16,7 @@
 #include <unistd.h>
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/SecureTransport.h>
 #include <Security/Security.h>
@@ -80,7 +80,7 @@ static int opasockTLSWriteCB(void* ctx, const unsigned char* buf, size_t len) {
 	return numWritten;
 }
 
-#if defined(_WIN32) || defined(__APPLE__)
+#if defined(_WIN32) || (defined(__APPLE__) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS))
 static int startsWith(const char* str, const char* prefix) {
 	size_t slen = strlen(str);
 	size_t prelen = strlen(prefix);
@@ -126,7 +126,7 @@ static int mbedtlsAddWinSysCerts(mbedtls_x509_crt* chain, const char* systemStor
 }
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__)
 static int mbedtlsAddOSXKeychainCerts(mbedtls_x509_crt* chain, const char* path) {
 	int err = 0;
 	int attempted = 0;
@@ -198,7 +198,7 @@ const char* mbedGetDefaultCAPath(void) {
 #elif defined(_WIN32)
 	// which windows system store to use here? why ROOT rather than CA? some cases that need to use several combined at once?
 	return MBED_SYSCERTSTORE_PREFIX "ROOT";
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)
 	return MBED_SYSCERTSTORE_PREFIX "/System/Library/Keychains/SystemRootCertificates.keychain";
 #else
 	return NULL;
@@ -244,7 +244,7 @@ int mbedCfgAddCACertsFile(mbedCfg* cfg, const char* filepath) {
 		return mbedtlsAddWinSysCerts(&cfg->mbedcacert, filepath + strlen(MBED_SYSCERTSTORE_PREFIX));
 	}
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)
 	if (startsWith(filepath, MBED_SYSCERTSTORE_PREFIX)) {
 		return mbedtlsAddOSXKeychainCerts(&cfg->mbedcacert, filepath + strlen(MBED_SYSCERTSTORE_PREFIX));
 	}

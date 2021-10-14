@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(__APPLE__) && (defined(OPA_SECTRANS) || defined(OPA_MBEDTLS))
+#if defined(__APPLE__) && (defined(OPA_SECTRANS) || (defined(OPA_MBEDTLS) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)))
 #include <Security/SecureTransport.h>
 #include <Security/Security.h>
 #endif
@@ -189,7 +189,7 @@ const opatlsLib* tlsutilsGetDefaultLib(void) {
 	return lib;
 }
 
-#if defined(__APPLE__) && (defined(OPA_SECTRANS) || defined(OPA_MBEDTLS))
+#if defined(__APPLE__) && (defined(OPA_SECTRANS) || (defined(OPA_MBEDTLS) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)))
 
 void osxRelease(CFTypeRef cf) {
 	if (cf != NULL) {
