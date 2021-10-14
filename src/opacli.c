@@ -178,26 +178,6 @@ static void opacliWsaStartup(void) {
 	}
 }
 
-static void usleep(unsigned long usec) {
-	LARGE_INTEGER li;
-	// SetWaitableTimer: negative value indicates relative time; positive value indicate absolute time
-	//  value is in 100-nanosecond intervals
-	li.QuadPart = 0LL - ((long long)usec * 10);
-	HANDLE ht = CreateWaitableTimer(NULL, TRUE, NULL);
-	if (ht != NULL) {
-		if (SetWaitableTimer(ht, &li, 0, NULL, NULL, FALSE)) {
-			WaitForSingleObject(ht, INFINITE);
-		} else {
-			LOGWINERR();
-		}
-		if (!CloseHandle(ht)) {
-			LOGWINERR();
-		}
-	} else {
-		LOGWINERR();
-	}
-}
-
 static int opaGetLineWinConsole(HANDLE h, opabuff* b) {
 	int err = 0;
 	opabuff wbuff;
