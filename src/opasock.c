@@ -36,10 +36,6 @@
 #define OPASOCKLOGERR() LOGWINERRCODE(WSAGetLastError())
 typedef int recvres;
 #else
-#ifdef __APPLE__
-// TODO: since apple doesn't have MSG_NOSIGNAL, should use signal(SIGPIPE, SIG_IGN) instead?
-#define MSG_NOSIGNAL 0
-#endif
 #define OPASOCKLOGERR() LOGSYSERRNO()
 #define closesocket close
 typedef ssize_t recvres;
@@ -213,6 +209,8 @@ int opasockRecv(opasock* s, void* buff, size_t len, size_t* pNumRead) {
 int opasockSend(opasock* s, const void* buff, size_t len, size_t* pNumWritten) {
 #ifdef _WIN32
 	int result = send(s->sid, buff, len < (size_t) INT_MAX ? (int)len : INT_MAX, 0);
+#elif defined(__APPLE__)
+	ssize_t result = send(s->sid, buff, len, 0);
 #else
 	ssize_t result = send(s->sid, buff, len, MSG_NOSIGNAL);
 #endif
