@@ -74,7 +74,7 @@ UNAME="${UNAME:-$(uname | tr '[:upper:]' '[:lower:]')}"
 if [ "$UNAME" = "linux" ]; then
 	CCACHE="" CFLAGS="-flto -march=x86-64" LDFLAGS="-flto -march=x86-64 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 	mv out/opacli "out/opacli-$VERSION-linux-x86_64"
-	CCACHE="" CFLAGS="-flto -march=i386 -m32" LDFLAGS="-flto -march=i386 -m32 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
+	CCACHE="" CFLAGS="-flto -march=i686 -m32" LDFLAGS="-flto -march=i686 -m32 -Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 	mv out/opacli "out/opacli-$VERSION-linux-x86"
 	CCACHE="" CC="i686-w64-mingw32-gcc" AR="i686-w64-mingw32-ar" TGTOS=win ./build
 	mv out/opacli.exe "out/opacli-$VERSION-win32.exe"

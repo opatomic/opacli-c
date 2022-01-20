@@ -23,7 +23,7 @@
 #   OPABIGINT_LIB=GMP ./build
 # to target 32-bit from 64-bit ubuntu:
 #   sudo apt-get install gcc-multilib
-#   CFLAGS="-march=i386 -m32" LDFLAGS="-march=i386 -m32" ./build
+#   CFLAGS="-march=i686 -m32" LDFLAGS="-march=i686 -m32" ./build
 # to build for older systems/glibc:
 #   LDFLAGS="-Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
 # to disable __stack_chk_fail (depends on glibc 2.4):
