@@ -123,7 +123,7 @@ static unsigned int argtouir(const char* s, unsigned int min, unsigned int max, 
 }
 
 static void printUsage(const char* bin, int exitCode) {
-	printf("Usage: %s [OPTIONS] [cmd [arg [arg ...]]]\n"
+	opa_printf("Usage: %s [OPTIONS] [cmd [arg [arg ...]]]\n"
 			"Options:\n"
 			" -h <hostname>   server hostname (default " DEFAULT_HOST ")\n"
 			" -p <port>       server port (default 4567)\n"
@@ -529,7 +529,7 @@ static int opacliIsAuthNeeded(opacliClient* c) {
 }
 
 static void printAndFlush(FILE* f, const char* str) {
-	fputs(str, f);
+	opa_fprintf(f, "%s", str);
 	fflush(f);
 }
 
@@ -544,7 +544,7 @@ static void opacliDoAuth2(opacliClient* c, const char* pass, int promptOnFailure
 			printAndFlush(fout, "password: ");
 			if (opacliGetPassFromTerm(fin, fout, '*', &buff)) {
 				opabuffFree(&buff);
-				fprintf(stderr, "error reading password\n");
+				opa_fprintf(stderr, "error reading password\n");
 				exit(EXIT_FAILURE);
 			}
 			printAndFlush(fout, "\n");
@@ -599,58 +599,18 @@ static void opacliDoAuth(opacliClient* c, const char* pass, int prompt) {
 	}
 }
 
-#ifdef _WIN32
-static void winPrintUtf8(FILE* f, const char* str) {
-	int fd = _fileno(f);
-	if (!isatty(fd)) {
-		fputs(str, f);
-		return;
-	}
-	wchar_t* wideStr = NULL;
-	int err = winUtf8ToWide(str, &wideStr);
-	if (!err) {
-		HANDLE h;
-		if (fd == STDOUT_FILENO) {
-			h = GetStdHandle(STD_OUTPUT_HANDLE);
-		} else if (fd == STDERR_FILENO) {
-			h = GetStdHandle(STD_ERROR_HANDLE);
-		} else {
-			h = INVALID_HANDLE_VALUE;
-		}
-		if (h != INVALID_HANDLE_VALUE) {
-			fflush(f);
-			// note: _setmode + fputws doesn't seem to work on win2k; some unicode chars do not print
-			WriteConsoleW(h, wideStr, wcslen(wideStr), NULL, NULL);
-		} else {
-			OPALOGERR("unknown file");
-		}
-	}
-	OPAFREE(wideStr);
-}
-#endif
-
 static void printResult(const opacReq* req, const char* indent) {
 	// TODO: when stringifying, should detect whether characters can be displayed and if not then escape to Unicode
 	//   escape sequence. how to determine if char is printable? isprint/iswprint?
 	char* resultStr = opasoStringify(opacReqGetResponse(req), indent);
 	if (resultStr != NULL) {
 		if (opacReqResponseIsErr(req)) {
-			fputs(STR_ERROR, stderr);
-			#ifdef _WIN32
-				winPrintUtf8(stderr, resultStr);
-			#else
-				fputs(resultStr, stderr);
-			#endif
+			opa_fprintf(stderr, STR_ERROR "%s\n", resultStr);
 		} else {
-			#ifdef _WIN32
-				winPrintUtf8(stdout, resultStr);
-			#else
-				fputs(resultStr, stdout);
-			#endif
+			opa_printf("%s\n", resultStr);
 		}
-		fputs("\n", stdout);
 	} else {
-		fprintf(stderr, "error stringifying response\n");
+		opa_fprintf(stderr, "%s\n", "error stringifying response");
 	}
 	OPAFREE(resultStr);
 }
@@ -751,15 +711,15 @@ static void reconnect(opacliClient* clic, const opacliConnectOptions* opts) {
 	while (1) {
 		if (opacliClientConnect(clic, opts)) {
 			if (opts->printStatus && tries > 0) {
-				fprintf(stderr, "Reconnected\n");
+				opa_fprintf(stderr, "Reconnected\n");
 			}
 			break;
 		}
 		if (opts->printStatus) {
 			if (tries == 0) {
-				fprintf(stderr, "Disconnected from server. Attempting to reconnect (%s:%d)...\n", opts->host, opts->port);
+				opa_fprintf(stderr, "Disconnected from server. Attempting to reconnect (%s:%d)...\n", opts->host, opts->port);
 			}
-			fprintf(stderr, "%lu\r", tries++);
+			opa_fprintf(stderr, "%lu\r", tries++);
 			fflush(stderr);
 		}
 		usleep(1000000);
@@ -880,7 +840,7 @@ static int mainInternal(int argc, const char* argv[]) {
 		} else if (strcmp(argv[i], "--tls-lib") == 0 && i + 1 < argc) {
 			tlsLib2 = tlsutilsGetLib(argv[i + 1]);
 			if (tlsLib2 == NULL) {
-				fprintf(stderr, "unsupported tls library \"%s\"\n", argv[i + 1]);
+				opa_fprintf(stderr, "unsupported tls library \"%s\"\n", argv[i + 1]);
 				exit(EXIT_FAILURE);
 			}
 			++i;
@@ -888,11 +848,11 @@ static int mainInternal(int argc, const char* argv[]) {
 			printUsage(binName, EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "--version") == 0) {
 			const opacBuildInfo* ocbi = opacGetBuildInfo();
-			printf("opacli %s (opac %s; %s; %s)\n", OPACLI_VERSION, ocbi->version, ocbi->threadSupport ? "threads" : "no-threads", ocbi->bigIntLib);
+			opa_printf("opacli %s (opac %s; %s; %s)\n", OPACLI_VERSION, ocbi->version, ocbi->threadSupport ? "threads" : "no-threads", ocbi->bigIntLib);
 #ifdef OPA_OPENSSL
 			const char* vstr = opensslGetVersionStr();
 			if (vstr != NULL) {
-				printf("%s\n", vstr);
+				opa_printf("%s\n", vstr);
 			}
 #endif
 #ifdef OPA_MBEDTLS
@@ -900,23 +860,23 @@ static int mainInternal(int argc, const char* argv[]) {
 				char tmp[32];
 				mbedtls_version_get_string_full(tmp);
 #ifdef MBEDTLS_GIT_HASH
-				printf("%s (%s)\n", tmp, PPXSTR(MBEDTLS_GIT_HASH));
+				opa_printf("%s (%s)\n", tmp, PPXSTR(MBEDTLS_GIT_HASH));
 #else
-				printf("%s\n", tmp);
+				opa_printf("%s\n", tmp);
 #endif
 			}
 #endif
 			exit(EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "--licenses") == 0) {
 			const char* sep = "-------------------------------------------------------------------------\n";
-			printf("Depending on how it is configured, this project may include source code from any of the following:\n\n");
+			opa_printf("Depending on how it is configured, this project may include source code from any of the following:\n\n");
 			const char* licenses[] = {
 #if defined(OPA_MBEDTLS) || defined(OPABIGINT_USE_MBED)
 				mbedtlsLicense1, mbedtlsLicense2, mbedtlsLicense3, sep,
 #endif
 				linenoiseLicense, sep, libtomLicense, sep, libdlbLicense, sep, opatomicLicense};
 			for (size_t j = 0; j < sizeof(licenses) / sizeof(licenses[0]); ++j) {
-				printf("%s\n", licenses[j]);
+				opa_printf("%s\n", licenses[j]);
 			}
 			exit(EXIT_SUCCESS);
 		} else {
@@ -924,7 +884,7 @@ static int mainInternal(int argc, const char* argv[]) {
 				usercmdIdx = i;
 				break;
 			}
-			fprintf(stderr, "unknown option or arg missing\n");
+			opa_fprintf(stderr, "unknown option or arg missing\n");
 			printUsage(binName, EXIT_FAILURE);
 		}
 	}
@@ -932,7 +892,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	if (connOpts.useTLS && tlsLib2 == NULL) {
 		tlsLib2 = tlsutilsGetDefaultLib();
 		if (tlsLib2 == NULL) {
-			fprintf(stderr, "cannot load default tls library\n");
+			opa_fprintf(stderr, "cannot load default tls library\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1020,7 +980,7 @@ static int mainInternal(int argc, const char* argv[]) {
 			}
 		} else {
 			if (istty) {
-				printf("%s", prompt);
+				opa_printf("%s", prompt);
 			}
 			if (!err) {
 				err = opaGetLine(src, &lineb);
@@ -1034,7 +994,7 @@ static int mainInternal(int argc, const char* argv[]) {
 		}
 
 		if (err || line == NULL) {
-			fprintf(stderr, "err %d occurred when reading line\n", err);
+			opa_fprintf(stderr, "err %d occurred when reading line\n", err);
 			exit(EXIT_FAILURE);
 		}
 
@@ -1046,9 +1006,9 @@ static int mainInternal(int argc, const char* argv[]) {
 		oparb ureq = oparbParseUserCommand(line);
 		if (ureq.err) {
 			if (ureq.errDesc == NULL) {
-				fprintf(stderr, "parse error: %d\n", ureq.err);
+				opa_fprintf(stderr, "parse error: %d\n", ureq.err);
 			} else {
-				fprintf(stderr, "parse error: %s\n", ureq.errDesc);
+				opa_fprintf(stderr, "parse error: %s\n", ureq.errDesc);
 			}
 			if (useLinenoise) {
 				linenoiseHistoryAdd(line);
@@ -1128,7 +1088,7 @@ static int mainInternal(int argc, const char* argv[]) {
 #endif
 	const opamallocStats* mstats = opamallocGetStats();
 	if (mstats->allocs > 0) {
-		fprintf(stderr, "memory leak? allocs: %lu\n", mstats->allocs);
+		opa_fprintf(stderr, "memory leak? allocs: %lu\n", mstats->allocs);
 	}
 #endif
 

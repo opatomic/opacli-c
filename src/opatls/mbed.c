@@ -324,9 +324,9 @@ int mbedHandshake(mbedConn* sd) {
 			if (flags != 0) {
 				char tmpbuff[256];
 				mbedtls_x509_crt_verify_info(tmpbuff, sizeof(tmpbuff), "  ", flags);
-				fprintf(stderr, "Peer verification problems:\n%s", tmpbuff);
+				opa_fprintf(stderr, "Peer verification problems:\n%s", tmpbuff);
 				if (mbederr == 0) {
-					fprintf(stderr, "--no-verify-peer requested; ignoring these problems\n");
+					opa_fprintf(stderr, "--no-verify-peer requested; ignoring these problems\n");
 				}
 			}
 		}
