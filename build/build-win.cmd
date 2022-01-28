@@ -76,7 +76,7 @@ rmdir /S /Q %TMPDIR%\libtommath
 ::rmdir /S /Q %TMPDIR%\libtommath
 
 
-set OPAC_VERSION=0.1.55
+set OPAC_VERSION=0.1.56
 set /p OPACLIVER=<version.txt
 :: TODO: if git is installed, and this directory is a proper git repo, determine whether the source
 ::   is modified and if not then assign a proper version string (without -win or -dev appended)
