@@ -16,17 +16,18 @@ if "%VCInstallDir%"=="" (
 
 	vswhere -legacy -latest -property installationPath
 	for /F "tokens=* USEBACKQ" %%i IN (`vswhere -legacy -latest -property installationPath`) do (set VSWHERERES=%%i)
-	echo "%VSWHERERES%"
+	echo %VSWHERERES%
 	if not "%VSWHERERES%"=="" (
 		call :InitMSVC "%VSWHERERES%\VC\Auxiliary\Build\vcvarsall.bat"
 	)
-	dir "%ProgramFiles(x86)%\Microsoft Visual Studio"
-	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022"
-	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise"
-	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC"
-	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary"
-	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
+	dir "%ProgramFiles%\Microsoft Visual Studio"
+	dir "%ProgramFiles%\Microsoft Visual Studio\2022"
+	dir "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise"
+	dir "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC"
+	dir "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary"
+	dir "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
 
+	call :InitMSVC "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
