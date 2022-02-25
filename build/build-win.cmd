@@ -20,7 +20,7 @@ if "%VCInstallDir%"=="" (
 	)
 
 	if not "!VSWHERERES!"=="" (
-		echo Attemping to init using vswhere.exe result "!VSWHERERES!"
+		echo Attempting to init using vswhere.exe result "!VSWHERERES!"
 		call :InitMSVC "!VSWHERERES!\VC\Auxiliary\Build\vcvarsall.bat"
 	)
 
