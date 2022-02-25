@@ -9,18 +9,22 @@ echo %cmdcmdline% | findstr /i /c:"%~nx0" >NUL 2>&1 && set standalone=1
 :: command should be something like:
 ::    "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -legacy -latest -property installationPath
 
-:: TODO: add more paths to check below
 :: note: %VCInstallDir% is set when vcvarsall.bat (or equivalent) has been run and environment is initialized
 if "%VCInstallDir%"=="" (
 	echo VC vars not set. Attempting to locate and run vcvarsall.bat %PROCESSOR_ARCHITECTURE%
 
-	vswhere -legacy -latest -property installationPath
-	for /F "tokens=* USEBACKQ" %%i IN (`vswhere -legacy -latest -property installationPath`) do (set VSWHERERES=%%i)
+	vswhere -legacy -latest -property installationPath >nul 2>&1 && (
+		for /F "tokens=* USEBACKQ" %%i IN (`vswhere -legacy -latest -property installationPath`) do (set VSWHERERES=%%i)
+	) || (
+		echo vswhere.exe cannot be used to locate vcvarsall.bat
+	)
+
 	if not "!VSWHERERES!"=="" (
 		echo Attemping to init using vswhere.exe result "!VSWHERERES!"
 		call :InitMSVC "!VSWHERERES!\VC\Auxiliary\Build\vcvarsall.bat"
 	)
 
+	:: TODO: add more paths to check
 	call :InitMSVC "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
