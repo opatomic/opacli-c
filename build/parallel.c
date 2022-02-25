@@ -292,19 +292,6 @@ static int startThread(HANDLE* pThread) {
 	return 1;
 }
 
-/*
-static int pthread_join(pthread_t t, void** pRetVal) {
-	assert(pRetVal == NULL);
-	DWORD result = WaitForSingleObject(t, INFINITE);
-	if (result != WAIT_OBJECT_0) {
-		// TODO: what error code to return here?
-		return 1;
-	}
-	CloseHandle(t);
-	return 0;
-}
-*/
-
 static int joinThread(HANDLE t) {
 	DWORD result = WaitForSingleObject(t, INFINITE);
 	if (result != WAIT_OBJECT_0) {
@@ -393,14 +380,6 @@ int main(int argc, const char* argv[]) {
 			G_EXITRES = EXIT_FAILURE;
 			break;
 		}
-		/*
-		err = pthread_join(t[i], NULL);
-		if (err) {
-			fprintf(stderr, "pthread_join() failed with err %d\n", err);
-			G_EXITRES = EXIT_FAILURE;
-			break;
-		}
-		*/
 	}
 	// TODO: If exit is failure, signal child processes to terminate and wait for them to finish/exit before exiting.
 	//   This is better in the case that a child process would normally run for a long time but a failure has occurred
