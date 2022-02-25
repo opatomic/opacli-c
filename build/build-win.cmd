@@ -13,6 +13,7 @@ echo %cmdcmdline% | findstr /i /c:"%~nx0" >NUL 2>&1 && set standalone=1
 :: note: %VCInstallDir% is set when vcvarsall.bat (or equivalent) has been run and environment is initialized
 if "%VCInstallDir%"=="" (
 	echo VC vars not set. Attempting to locate and run vcvarsall.bat %PROCESSOR_ARCHITECTURE%
+	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2018\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"

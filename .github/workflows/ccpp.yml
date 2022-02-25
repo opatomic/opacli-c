@@ -20,8 +20,6 @@ jobs:
         os: [windows-latest]
     steps:
     - uses: actions/checkout@v1
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1.1
     - name: build
       shell: cmd
       working-directory: build
