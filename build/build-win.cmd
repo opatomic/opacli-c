@@ -30,7 +30,9 @@ set SRCDIR=%cd%\..\src
 set TMPDIR=%cd%\tmp
 set OUTDIR=%cd%\out
 set DEPDIR=%cd%\dep
+set UTILDIR=%cd%\util
 set LIBTOMDIR=%cd%\..\deps\libtommath
+set PBFN=%TMPDIR%\parallel.txt
 
 
 
@@ -57,10 +59,21 @@ if not exist %TMPDIR% mkdir %TMPDIR%
 if exist %OUTDIR%\opacli.exe del %OUTDIR%\opacli.exe
 
 
+if not "%PBFN%"=="" (
+	if not exist "%UTILDIR%" mkdir "%UTILDIR%"
+	if exist "%UTILDIR%\parallel.exe" del "%UTILDIR%\parallel.exe"
+	if exist "%UTILDIR%\parallel.obj" del "%UTILDIR%\parallel.obj"
+	if exist "%PBFN%" del "%PBFN%"
+	cl -nologo -Ox -Z7 /MD -W4 "-Fo%UTILDIR%\parallel.obj" parallel.c /link /out:%UTILDIR%\parallel.exe /debug:none
+	if exist "%UTILDIR%\parallel.obj" del "%UTILDIR%\parallel.obj"
+)
 
 set INCS="-I."
 mkdir %TMPDIR%\libtommath
 call :BuildDir %LIBTOMDIR%\*.c %TMPDIR%\libtommath
+
+call :pbuild
+
 pushd %TMPDIR%\libtommath
 call :GetFLIST .\*.obj
 lib -nologo "-out:..\tommath.lib" %FLIST%
@@ -96,6 +109,12 @@ set INCS=%INCS% "-I%DEPDIR%\opac-c\src"
 set INCS=%INCS% "-I%SRCDIR%"
 call :BuildDir ..\src\*.c %TMPDIR%
 call :BuildDir ..\src\opatls\*.c %TMPDIR%
+
+call :pbuild
+
+:: TODO: determine how to link with msvcrt.dll rather than visual c runtime
+::  use dumpbin.exe + script-to-modify-output + lib.exe
+::  https://gist.github.com/SolomonSklash/fc02b48a7a70ecb1508977a8e41d43e5
 
 call :GetFLIST %TMPDIR%\*.obj
 cl -nologo /MD "-Fe%OUTDIR%\opacli.exe" %FLIST% "%TMPDIR%\tommath.lib" ws2_32.lib advapi32.lib
@@ -154,19 +173,31 @@ exit /b %ERRCODE%
 )
 
 :BuildFile (
-	echo building %~nx1
-
-	:: note: changing current directory so that __FILE__ is a string with only the file's basename (no extra directory info)
-	pushd %~dp1
-	cl -nologo -c %MSVCOPTS% %MSVCWARN% %DEFS% %INCS% "-Fo%~2\%~n1.obj" "%~nx1"
-	popd
-
+	if "%PBFN%"=="" (
+		echo building %~nx1
+		:: note: changing current directory so that __FILE__ is a string with only the file's basename (no extra directory info)
+		pushd %~dp1
+		cl -nologo -c %MSVCOPTS% %MSVCWARN% %DEFS% %INCS% "-Fo%~2\%~n1.obj" "%~nx1"
+		popd
+	) else (
+		echo %~dp1 >> "%PBFN%"
+		echo cl -nologo -c %MSVCOPTS% %MSVCWARN% %DEFS% %INCS% "-Fo%~2\%~n1.obj" "%~nx1" >> "%PBFN%"
+		echo.>>"%PBFN%"
+	)
 	goto :EOF
 )
 
 :BuildDir (
 	for %%i in (%1) do (
 		call :BuildFile %%i %2
+	)
+	goto :EOF
+)
+
+:pbuild (
+	if not "%PBFN%"=="" (
+		"%UTILDIR%\parallel" < "%PBFN%"
+		del "%PBFN%"
 	)
 	goto :EOF
 )
