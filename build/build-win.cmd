@@ -43,9 +43,10 @@ set MSVCOPTS=-Ox -Z7 /MD
 set MSVCWARN=-Wall -wd4204 -wd4710 -wd4820 -wd5045
 
 :: -Wall includes some really useless warnings; use -W4 instead
+:: C4127: conditional expression is constant
 :: C4204: initialize a struct or array with a non-constant value
-:: TODO: determine if there's any additional warnings to include
-set MSVCWARN=-W4 -wd4204
+:: TODO: determine if there's any additional warnings to include/exclude
+set MSVCWARN=-W4 -wd4127 -wd4204
 
 
 
