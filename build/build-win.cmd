@@ -14,11 +14,18 @@ echo %cmdcmdline% | findstr /i /c:"%~nx0" >NUL 2>&1 && set standalone=1
 if "%VCInstallDir%"=="" (
 	echo VC vars not set. Attempting to locate and run vcvarsall.bat %PROCESSOR_ARCHITECTURE%
 
+	vswhere -legacy -latest -property installationPath
 	for /F "tokens=* USEBACKQ" %%i IN (`vswhere -legacy -latest -property installationPath`) do (set VSWHERERES=%%i)
-	echo %VSWHERERES%
+	echo "%VSWHERERES%"
 	if not "%VSWHERERES%"=="" (
 		call :InitMSVC "%VSWHERERES%\VC\Auxiliary\Build\vcvarsall.bat"
 	)
+	dir "%ProgramFiles(x86)%\Microsoft Visual Studio"
+	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022"
+	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise"
+	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC"
+	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary"
+	dir "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build"
 
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 	call :InitMSVC "%ProgramFiles(x86)%\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
