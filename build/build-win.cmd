@@ -1,6 +1,8 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+:: note: if file names contain non-ascii characters then user should run `chcp 65001`
+
 :: determine whether script was run by double clicking in explorer
 echo %cmdcmdline% | findstr /i /c:"%~nx0" >NUL 2>&1 && set standalone=1
 
@@ -65,11 +67,11 @@ set MSVCWARN=-W4 -wd4127 -wd4204
 
 
 
-if exist %TMPDIR% rmdir /S /Q %TMPDIR%
-if not exist %TMPDIR% mkdir %TMPDIR%
-if not exist %OUTDIR% mkdir %OUTDIR%
-if not exist %TMPDIR% mkdir %TMPDIR%
-if exist %OUTDIR%\opacli.exe del %OUTDIR%\opacli.exe
+if exist "%TMPDIR%" rmdir /S /Q "%TMPDIR%"
+if not exist "%TMPDIR%" mkdir "%TMPDIR%"
+if not exist "%OUTDIR%" mkdir "%OUTDIR%"
+if not exist "%TMPDIR%" mkdir "%TMPDIR%"
+if exist "%OUTDIR%\opacli.exe" del "%OUTDIR%\opacli.exe"
 
 
 if not "%PBFN%"=="" (
@@ -77,21 +79,21 @@ if not "%PBFN%"=="" (
 	if exist "%UTILDIR%\parallel.exe" del "%UTILDIR%\parallel.exe"
 	if exist "%UTILDIR%\parallel.obj" del "%UTILDIR%\parallel.obj"
 	if exist "%PBFN%" del "%PBFN%"
-	cl -nologo -Ox -Z7 /MD -W4 "-Fo%UTILDIR%\parallel.obj" parallel.c /link /out:%UTILDIR%\parallel.exe /debug:none
+	cl -nologo -Ox -Z7 /MD -W4 "-Fo%UTILDIR%\parallel.obj" parallel.c /link "/out:%UTILDIR%\parallel.exe" /debug:none
 	if exist "%UTILDIR%\parallel.obj" del "%UTILDIR%\parallel.obj"
 )
 
 set INCS="-I."
-mkdir %TMPDIR%\libtommath
-call :BuildDir %LIBTOMDIR%\*.c %TMPDIR%\libtommath
+mkdir "%TMPDIR%\libtommath"
+call :BuildDir "%LIBTOMDIR%\*.c" "%TMPDIR%\libtommath"
 
 call :pbuild
 
-pushd %TMPDIR%\libtommath
+pushd "%TMPDIR%\libtommath"
 call :GetFLIST .\*.obj
 lib -nologo "-out:..\tommath.lib" %FLIST%
 popd
-rmdir /S /Q %TMPDIR%\libtommath
+rmdir /S /Q "%TMPDIR%\libtommath"
 
 ::mkdir %TMPDIR%\libtommath
 ::xcopy %LIBTOMDIR% %TMPDIR%\libtommath /e
@@ -112,16 +114,16 @@ set OPACLIVER=%OPACLIVER%-win-dev
 set DEFS=-DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0500 -DWINVER=0x0500 -DOPA_NOTHREADS -DOPAC_VERSION=\"%OPAC_VERSION%\" -DOPACLI_VERSION=\"%OPACLIVER%\" -DOPABIGINT_USE_LTM
 set INCS="-I%LIBTOMDIR%"
 
-call :GitCloneTag https://github.com/opatomic/opac-c.git %DEPDIR%\opac-c v%OPAC_VERSION%
+call :GitCloneTag https://github.com/opatomic/opac-c.git "%DEPDIR%\opac-c" "v%OPAC_VERSION%"
 if not %ERRCODE%==0 (
 	if defined standalone pause
 	exit /b %ERRCODE%
 )
-call :BuildDir %DEPDIR%\opac-c\src\*.c %TMPDIR%
+call :BuildDir "%DEPDIR%\opac-c\src\*.c" "%TMPDIR%"
 set INCS=%INCS% "-I%DEPDIR%\opac-c\src"
 set INCS=%INCS% "-I%SRCDIR%"
-call :BuildDir ..\src\*.c %TMPDIR%
-call :BuildDir ..\src\opatls\*.c %TMPDIR%
+call :BuildDir ..\src\*.c "%TMPDIR%"
+call :BuildDir ..\src\opatls\*.c "%TMPDIR%"
 
 call :pbuild
 
@@ -129,14 +131,14 @@ call :pbuild
 ::  use dumpbin.exe + script-to-modify-output + lib.exe
 ::  https://gist.github.com/SolomonSklash/fc02b48a7a70ecb1508977a8e41d43e5
 
-call :GetFLIST %TMPDIR%\*.obj
+call :GetFLIST "%TMPDIR%\*.obj"
 cl -nologo /MD "-Fe%OUTDIR%\opacli.exe" %FLIST% "%TMPDIR%\tommath.lib" ws2_32.lib advapi32.lib
 
 ::set LNOPTS=/MANIFEST:NO /OPT:REF /OPT:NOICF /DEBUG /nodefaultlib:libcmt.lib
 ::link -nologo %LNOPTS% "/out:%OUTDIR%\opacli.exe" %FLIST% "%LIBTOMDIR%\tommath.lib" ws2_32.lib msvcrt.lib kernel32.lib
 
 echo done.
-if exist %OUTDIR%\opacli.exe (
+if exist "%OUTDIR%\opacli.exe" (
 	echo opacli.exe is in out directory
 	set ERRCODE=0
 ) else (
@@ -202,7 +204,7 @@ exit /b %ERRCODE%
 
 :BuildDir (
 	for %%i in (%1) do (
-		call :BuildFile %%i %2
+		call :BuildFile "%%i" %2
 	)
 	goto :EOF
 )
