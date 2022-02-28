@@ -125,19 +125,47 @@ static int readLine(line* l) {
 }
 
 #ifdef _WIN32
+static wchar_t* winUtf8ToWide(const char* utf8Str) {
+	if (utf8Str == NULL) {
+		return NULL;
+	}
+	int reqLen = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, NULL, 0);
+	if (reqLen == 0) {
+		return NULL;
+	}
+	wchar_t* wideStr = malloc(reqLen * sizeof(wchar_t));
+	if (wideStr == NULL) {
+		return NULL;
+	}
+	int checkRes = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, wideStr, reqLen);
+	if (checkRes == 0) {
+		free(wideStr);
+		return NULL;
+	}
+	//assert(checkRes == reqLen);
+	return wideStr;
+}
+
 static void runCommand(const char* dir, char* cmd, const char* msg) {
-	STARTUPINFOA si = {0};
+	STARTUPINFOW si = {0};
 	PROCESS_INFORMATION pi = {0};
 	si.cb = sizeof(si);
-	
-	if (!CreateProcessA(NULL, cmd, NULL, NULL, TRUE, 0, NULL, dir, &si, &pi)) {
+
+	wchar_t* wdir = winUtf8ToWide(dir);
+	wchar_t* wcmd = winUtf8ToWide(cmd);
+	if (wdir == NULL || wcmd == NULL) {
+		logAndExit("winUtf8ToWide() failed");
+	}
+
+	if (!CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, 0, NULL, wdir, &si, &pi)) {
+		// TODO: log wcmd, wdir, error code, error string
 		logAndExit("CreateProcess() failed");
 	}
 
 	if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0) {
 		logAndExit("WaitForSingleObject() failed");
 	}
-	
+
 	DWORD exitCode;
 	if (!GetExitCodeProcess(pi.hProcess, &exitCode)) {
 		logAndExit("GetExitCodeProcess() failed");
@@ -149,9 +177,11 @@ static void runCommand(const char* dir, char* cmd, const char* msg) {
 	} else {
 		logAndExit("command failed");
 	}
-	
+
 	CloseHandle(pi.hProcess);
 	CloseHandle(pi.hThread);
+	free(wcmd);
+	free(wdir);
 }
 
 #else
@@ -350,7 +380,11 @@ int main(int argc, const char* argv[]) {
 	// TODO: allow user to specify the command to use on linux. ie, "sh"
 	UNUSED(argc);
 	UNUSED(argv);
-	
+
+#ifdef _WIN32
+	SetConsoleOutputCP(CP_UTF8);
+#endif
+
 	int nprocs = get_nprocs();
 	if (nprocs <= 0) {
 		fprintf(stderr, "error: get_nprocs() returned %d\n", nprocs);
