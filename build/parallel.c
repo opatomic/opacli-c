@@ -261,6 +261,10 @@ static int lineReplaceEOL(line* l) {
 	}
 	--l->len;
 	l->buff[l->len] = 0;
+	if (l->len > 0 && l->buff[l->len - 1] == '\r') {
+		--l->len;
+		l->buff[l->len] = 0;
+	}
 	return 1;
 }
 
