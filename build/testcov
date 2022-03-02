@@ -18,7 +18,7 @@ MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
 CFLAGS="-std=c99 -O0 -g -fprofile-arcs -ftest-coverage -DUSELINENOISE=0 -DOPA_NOTHREADS -DOPAC_READLEN=2 -DOPA_MBEDTLS -DOPABIGINT_USE_MBED $CFLAGS"
 LDFLAGS="-g -fprofile-arcs -ftest-coverage $LDFLAGS"
 
-ensuredir "$TMPDIR"
+mkdir -p "$TMPDIR"
 rm -rf "${TMPDIR:?}/"*
 
 cp "$DEPDIR/opac-c/src/"* "$TMPDIR"

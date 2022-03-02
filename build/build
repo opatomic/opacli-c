@@ -98,9 +98,9 @@ else
 	exit 1
 fi
 
-ensuredir "$OUTDIR"
-ensuredir "$TMPDIR"
-ensuredir "$DEPDIR"
+mkdir -p "$OUTDIR"
+mkdir -p "$TMPDIR"
+mkdir -p "$DEPDIR"
 rm -rf "${TMPDIR:?}/"*
 
 
