@@ -150,7 +150,7 @@ elif [ "$OPABIGINT_LIB" = "LTM" ]; then
 	INCS="$INCS -I../deps/libtommath"
 fi
 
-OPACVER=$(cat $DEPDIR/opac-c/build/version.txt) || exit 1
+OPACVER=$(cat "$DEPDIR/opac-c/build/version.txt") || exit 1
 DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
 builddir "$DEPDIR/opac-c/src" "$TMPDIR"
 
