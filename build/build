@@ -121,7 +121,7 @@ if [ "$TGTOS" != "win" ]; then
 	# compiling linenoise requires a feature test macro enabled and some warnings disabled
 	# defining _GNU_SOURCE rather than _BSD_SOURCE to avoid dependency on __isoc99_sscanf (glibc 2.7)
 	ORIGCF="$CFLAGS"
-	CFLAGS="$CFLAGS -D_GNU_SOURCE $(testgccopt -Wno-missing-prototypes) $(testgccopt -Wno-pedantic)"
+	CFLAGS="$CFLAGS -D_GNU_SOURCE $(testgccopt -Wno-missing-prototypes -Wno-pedantic)"
 	INCS=""
 	buildcfile "../deps/linenoise/linenoise.c" "$TMPDIR"
 	CFLAGS="$ORIGCF"
