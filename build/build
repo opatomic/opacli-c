@@ -39,6 +39,7 @@ TMPDIR="tmp"
 OUTDIR="out"
 DEPDIR="dep"
 UTILDIR="util"
+PBFN="$TMPDIR/parallel.txt"
 
 OPAC_VERSION="${OPAC_VERSION:-0.1.60}"
 OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
@@ -68,6 +69,13 @@ gitCloneTag() {
 
 gitCloneTag "https://github.com/opatomic/opac-c.git" "$DEPDIR/opac-c" "v$OPAC_VERSION"
 . "$DEPDIR/opac-c/build/opabuildutil.sh"
+
+if [ "$PBFN" != "" ]; then
+	mkdir -p "$UTILDIR"
+	[ -f "$PBFN" ] && rm "$PBFN"
+	cc parallel.c -o "$UTILDIR/parallel" -std=c99 -O2 -s $GCCWARN -lpthread
+	"$UTILDIR/parallel" < /dev/null > /dev/null 2>&1 || PBFN=""
+fi
 
 #if [[ ! ($TGTOS == "linux" || $TGTOS == "win" || $TGTOS == "darwin" ) ]]; then
 #	echo "$TGTOS not supported; must set \$TGTOS properly"
@@ -112,6 +120,7 @@ fi
 if [ "$OPABIGINT_LIB" = "LTM" ]; then
 	INCS=""
 	builddir "../deps/libtommath" "$TMPDIR"
+	pbuild
 	$AR $ARFLAGS "$TMPDIR/libtommath.a" "$TMPDIR"/*.o
 	rm -rf "${TMPDIR:?}/"*.o
 fi
@@ -148,10 +157,13 @@ INCS=""
 [ "$OPABIGINT_LIB" = "mbedtls" ] && INCS="$INCS -I../../../$MBEDTLS_DIR/include"
 [ "$OPABIGINT_LIB" = "LTM" ] && INCS="$INCS -I../../../../deps/libtommath"
 OPACVER=$(cat "$DEPDIR/opac-c/build/version.txt") || exit 1
-DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
+[ "$PBFN"  = "" ] && DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
+[ "$PBFN" != "" ] && DEFS="$DEFS -DOPAC_VERSION=\\\"$OPACVER\\\""
 builddir "$DEPDIR/opac-c/src" "$TMPDIR"
 
-DEFS="$DEFS $OPATLS_DEFS -DOPACLI_VERSION=\"$(./verget)\""
+DEFS="$DEFS $OPATLS_DEFS"
+[ "$PBFN"  = "" ] && DEFS="$DEFS -DOPACLI_VERSION=\"$(./verget)\""
+[ "$PBFN" != "" ] && DEFS="$DEFS -DOPACLI_VERSION=\\\"$(./verget)\\\""
 INCS="-I. -I../build/$DEPDIR/opac-c/src -I../deps/linenoise -I../build/$MBEDTLS_DIR/include"
 builddir "$SRCDIR" "$TMPDIR"
 INCS="-I.. -I../../build/$DEPDIR/opac-c/src -I../../build/$MBEDTLS_DIR/include"
@@ -160,6 +172,8 @@ builddir "$SRCDIR/opatls" "$TMPDIR"
 CFLAGS="$CFLAGS $(testgccopt -fno-lto)"
 INCS=""
 buildcfile "$DEPDIR/opac-c/build/wrapmemcpy.c" "$TMPDIR"
+
+pbuild
 
 echo "linking opacli..."
 FLIST="$(ls $TMPDIR/*.o | sort)"
