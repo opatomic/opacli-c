@@ -73,7 +73,7 @@ buildmbedtls() {
 		exit 1
 	fi
 
-	ORIGDIR=$(pwd)
+	ORIGDIR="$PWD"
 
 	if [ -d "$MBEDTLS_DIR" ]; then
 		if [ "$(git -C "$MBEDTLS_DIR" rev-parse --abbrev-ref HEAD)" != "$MBEDTLS_BRANCH" ]; then
