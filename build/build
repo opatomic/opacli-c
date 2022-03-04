@@ -35,11 +35,11 @@
 
 
 SRCDIR="../src"
-TMPDIR="tmp"
+OTMPDIR="tmp"
 OUTDIR="out"
 DEPDIR="dep"
 UTILDIR="util"
-PBFN="$TMPDIR/parallel.txt"
+PBFN="$OTMPDIR/parallel.txt"
 
 OPAC_VERSION="${OPAC_VERSION:-0.1.61}"
 OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
@@ -94,7 +94,7 @@ if [ "$OPABIGINT_LIB" = "mbedtls" ]; then
 	fi
 elif [ "$OPABIGINT_LIB" = "LTM" ]; then
 	CFLAGS="-DOPABIGINT_USE_LTM $CFLAGS"
-	LNLIBS="$LNLIBS $TMPDIR/libtommath.a"
+	LNLIBS="$LNLIBS $OTMPDIR/libtommath.a"
 elif [ "$OPABIGINT_LIB" = "GMP" ]; then
 	echo "linking with GMP"
 	CFLAGS="-DOPABIGINT_USE_GMP $CFLAGS"
@@ -107,9 +107,9 @@ else
 fi
 
 mkdir -p "$OUTDIR"
-mkdir -p "$TMPDIR"
+mkdir -p "$OTMPDIR"
 mkdir -p "$DEPDIR"
-rm -rf "${TMPDIR:?}/"*
+rm -rf "${OTMPDIR:?}/"*
 
 
 if [ "$OS" = "Windows_NT" ]; then
@@ -119,10 +119,10 @@ fi
 
 if [ "$OPABIGINT_LIB" = "LTM" ]; then
 	INCS=""
-	builddir "../deps/libtommath" "$TMPDIR"
+	builddir "../deps/libtommath" "$OTMPDIR"
 	pbuild
-	$AR $ARFLAGS "$TMPDIR/libtommath.a" "$TMPDIR"/*.o
-	rm -rf "${TMPDIR:?}/"*.o
+	$AR $ARFLAGS "$OTMPDIR/libtommath.a" "$OTMPDIR"/*.o
+	rm -rf "${OTMPDIR:?}/"*.o
 fi
 
 
@@ -132,7 +132,7 @@ if [ "$TGTOS" != "win" ]; then
 	ORIGCF="$CFLAGS"
 	CFLAGS="$CFLAGS -D_GNU_SOURCE $(testgccopt -Wno-missing-prototypes -Wno-pedantic)"
 	INCS=""
-	buildcfile "../deps/linenoise/linenoise.c" "$TMPDIR"
+	buildcfile "../deps/linenoise/linenoise.c" "$OTMPDIR"
 	CFLAGS="$ORIGCF"
 fi
 
@@ -159,26 +159,26 @@ INCS=""
 OPACVER=$(cat "$DEPDIR/opac-c/build/version.txt") || exit 1
 [ "$PBFN"  = "" ] && DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
 [ "$PBFN" != "" ] && DEFS="$DEFS -DOPAC_VERSION=\\\"$OPACVER\\\""
-builddir "$DEPDIR/opac-c/src" "$TMPDIR"
+builddir "$DEPDIR/opac-c/src" "$OTMPDIR"
 
 DEFS="$DEFS $OPATLS_DEFS"
 [ "$PBFN"  = "" ] && DEFS="$DEFS -DOPACLI_VERSION=\"$(./verget)\""
 [ "$PBFN" != "" ] && DEFS="$DEFS -DOPACLI_VERSION=\\\"$(./verget)\\\""
 INCS="-I. -I../build/$DEPDIR/opac-c/src -I../deps/linenoise -I../build/$MBEDTLS_DIR/include"
-builddir "$SRCDIR" "$TMPDIR"
+builddir "$SRCDIR" "$OTMPDIR"
 INCS="-I.. -I../../build/$DEPDIR/opac-c/src -I../../build/$MBEDTLS_DIR/include"
-builddir "$SRCDIR/opatls" "$TMPDIR"
+builddir "$SRCDIR/opatls" "$OTMPDIR"
 
 CFLAGS="$CFLAGS $(testgccopt -fno-lto)"
 INCS=""
-buildcfile "$DEPDIR/opac-c/build/wrapmemcpy.c" "$TMPDIR"
+buildcfile "$DEPDIR/opac-c/build/wrapmemcpy.c" "$OTMPDIR"
 
 pbuild
 
 echo "linking opacli..."
-FLIST="$(ls $TMPDIR/*.o | sort)"
+FLIST="$(ls $OTMPDIR/*.o | sort)"
 [ "$TGTOS" = "win" ] && EXEEXT=".exe" || EXEEXT=""
 $CC $LDFLAGS $OPATLS_LDFLAGS -o "$OUTDIR/opacli-debug$EXEEXT" $FLIST $LNLIBS $OPATLS_LNLIBS || exit 1
 strip $STRIPALLFLAG -o "$OUTDIR/opacli$EXEEXT" "$OUTDIR/opacli-debug$EXEEXT"
 
-rm -rf "${TMPDIR:?}/"*
+rm -rf "${OTMPDIR:?}/"*
