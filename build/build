@@ -178,7 +178,7 @@ pbuild
 echo "linking opacli..."
 FLIST="$(ls $TMPDIR/*.o | sort)"
 [ "$TGTOS" = "win" ] && EXEEXT=".exe" || EXEEXT=""
-$CC $LDFLAGS $OPATLS_LDFLAGS -o "$OUTDIR/opacli-debug$EXEEXT" $FLIST $LNLIBS $OPATLS_LNLIBS
+$CC $LDFLAGS $OPATLS_LDFLAGS -o "$OUTDIR/opacli-debug$EXEEXT" $FLIST $LNLIBS $OPATLS_LNLIBS || exit 1
 strip $STRIPALLFLAG -o "$OUTDIR/opacli$EXEEXT" "$OUTDIR/opacli-debug$EXEEXT"
 
 rm -rf "${TMPDIR:?}/"*
