@@ -3,7 +3,7 @@ const char* opatomicLicense =
 "https://github.com/opatomic/opac-c\n"
 "https://github.com/opatomic/opacli-c\n"
 "\n"
-"Copyright 2018-2020 Opatomic\n"
+"Copyright 2018-2022 Opatomic\n"
 "\n"
 "Permission to use, copy, modify, and/or distribute this software for any\n"
 "purpose with or without fee is hereby granted, provided that the above\n"
