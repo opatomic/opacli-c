@@ -47,6 +47,10 @@ MBEDTLS_DIR="$DEPDIR/mbedtls"
 MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.28}"
 MBEDTLS_CONFIG_FILE="mbedtls.opacli.config.h"
 
+# note: %at is author timestamp (rather than commit timestamp which can change)
+LAST_COMMIT_DATE="$(git log -1 --format=%at)" || echo "cannot determine date of last commit" >&2
+[ "$LAST_COMMIT_DATE" != "" ] && export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$LAST_COMMIT_DATE}"
+
 
 # args: gitRepoUrl destDir tagToCheckout
 gitCloneTag() {
