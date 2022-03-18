@@ -9,7 +9,7 @@ TMPDIR="tmp"
 . "$DEPDIR/opac-c/build/opabuildutil.sh"
 
 MBEDTLS_DIR="$DEPDIR/mbedtls"
-MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.16}"
+MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.28}"
 MBEDTLS_CONFIG_FILE="$PWD/mbedtls.opacli.config.h"
 . ./build-opatls.sh
 
