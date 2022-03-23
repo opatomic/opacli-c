@@ -155,6 +155,9 @@ if [ "$TGTOS" = "win" ]; then
 	DEFS="$DEFS -D_WIN32_WINNT=0x0500 -DWINVER=0x0500"
 	LNLIBS="$LNLIBS -lws2_32"
 	LDFLAGS="-municode $LDFLAGS"
+	if [ "$OPA_MBEDTLS" != "0" ] || [ "$OPABIGINT_LIB" = "mbedtls" ]; then
+		LDFLAGS="-Wl,--wrap=vsnprintf_s $LDFLAGS"
+	fi
 fi
 
 INCS=""
@@ -176,6 +179,7 @@ builddir "$SRCDIR/opatls" "$OTMPDIR"
 CFLAGS="$CFLAGS $(testgccopt -fno-lto)"
 INCS=""
 buildcfile "$DEPDIR/opac-c/build/wrapmemcpy.c" "$OTMPDIR"
+buildcfile "wrapvsnprintf_s.c" "$OTMPDIR"
 
 pbuild
 
