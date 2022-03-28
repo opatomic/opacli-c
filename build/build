@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # variables that can be set:
-#   OPABIGINT_LIB  use different bigint library
+#   OPABIGINT_LIB  use different bigint library (GMP, mbedtls, LTM)
 #   CFLAGS         extra args to pass to compiler during compile stage
 #   LDFLAGS        extra args to pass to linker during link stage
 #   TGTOS          target os (default is from `uname`)
@@ -24,15 +24,12 @@
 # to target 32-bit from 64-bit ubuntu:
 #   sudo apt-get install gcc-multilib
 #   CFLAGS="-march=i686 -m32" LDFLAGS="-march=i686 -m32" ./build
-# to build for older systems/glibc:
-#   LDFLAGS="-Wl,--wrap=memcpy -Wl,--hash-style=both" ./build
-# to disable __stack_chk_fail (depends on glibc 2.4):
-#   CFLAGS="-fno-stack-protector" ./build
-# to disable all __*printf_chk (depends on glibc 2.3.4):
-#   CFLAGS="-U_FORTIFY_SOURCE" ./build
 # to view dependencies:
 #   objdump -T out/opacli | sort
 
+
+#[ "$TGTOS" = "" ] && { echo '$TGTOS not defined' >&2; exit 1; }
+#[ "$TGTOS" = "linux" ] || [ "$TGTOS" = "win" ] || [ "$TGTOS" = "darwin" ] || { echo "\$TGTOS \"$TGTOS\" not supported" >&2; exit 1; }
 
 SRCDIR="../src"
 OTMPDIR="tmp"
@@ -80,11 +77,6 @@ if [ "$PBFN" != "" ]; then
 	cc parallel.c -o "$UTILDIR/parallel" -std=c99 -O2 -s $GCCWARN -lpthread
 	"$UTILDIR/parallel" < /dev/null > /dev/null 2>&1 || PBFN=""
 fi
-
-#if [[ ! ($TGTOS == "linux" || $TGTOS == "win" || $TGTOS == "darwin" ) ]]; then
-#	echo "$TGTOS not supported; must set \$TGTOS properly"
-#	exit 1
-#fi
 
 CFLAGS="-std=c99 -O2 -g $CFLAGS"
 CFLAGS="-D_FILE_OFFSET_BITS=64 $CFLAGS"
