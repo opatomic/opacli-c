@@ -151,8 +151,12 @@ DEFS="-DOPA_NOTHREADS"
 
 
 if [ "$TGTOS" = "win" ]; then
-	DEFS="$DEFS -DWIN32_LEAN_AND_MEAN -D__USE_MINGW_ANSI_STDIO"
+	# disabling __USE_MINGW_ANSI_STDIO saves space in final binary; however, must be careful when
+	# using any of the *printf functions provided by msvcrt - they do not follow the API standard
+	DEFS="$DEFS -DWIN32_LEAN_AND_MEAN -D__USE_MINGW_ANSI_STDIO=0"
 	DEFS="$DEFS -D_WIN32_WINNT=0x0500 -DWINVER=0x0500"
+	# the following warning is needed if __USE_MINGW_ANSI_STDIO is disabled
+	CFLAGS="$(testgccopt -Wno-pedantic-ms-format) $CFLAGS"
 	LNLIBS="$LNLIBS -lws2_32"
 	LDFLAGS="-municode $LDFLAGS"
 	if [ "$OPA_MBEDTLS" != "0" ] || [ "$OPABIGINT_LIB" = "mbedtls" ]; then
