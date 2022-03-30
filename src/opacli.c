@@ -75,7 +75,7 @@
 
 
 #ifndef OPACLI_VERSION
-#define OPACLI_VERSION "0.0.0-dev"
+#define OPACLI_VERSION 0.0.0-dev
 #endif
 
 #define STR_ERROR "ERROR: "
@@ -848,7 +848,7 @@ static int mainInternal(int argc, const char* argv[]) {
 			printUsage(binName, EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "--version") == 0) {
 			const opacBuildInfo* ocbi = opacGetBuildInfo();
-			opa_printf("opacli %s (opac %s; %s; %s)\n", OPACLI_VERSION, ocbi->version, ocbi->threadSupport ? "threads" : "no-threads", ocbi->bigIntLib);
+			opa_printf("opacli %s (opac %s; %s; %s)\n", PPXSTR(OPACLI_VERSION), ocbi->version, ocbi->threadSupport ? "threads" : "no-threads", ocbi->bigIntLib);
 #ifdef OPA_OPENSSL
 			const char* vstr = opensslGetVersionStr();
 			if (vstr != NULL) {
