@@ -38,7 +38,7 @@ DEPDIR="dep"
 UTILDIR="util"
 PBFN="$OTMPDIR/parallel.txt"
 
-OPAC_VERSION="${OPAC_VERSION:-0.1.66}"
+OPAC_VERSION="${OPAC_VERSION:-0.1.67}"
 OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
 MBEDTLS_DIR="$DEPDIR/mbedtls"
 MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.28}"
@@ -159,9 +159,8 @@ fi
 INCS=""
 [ "$OPABIGINT_LIB" = "mbedtls" ] && INCS="$INCS -I../../../$MBEDTLS_DIR/include"
 [ "$OPABIGINT_LIB" = "LTM" ] && INCS="$INCS -I../../../../deps/libtommath"
-OPACVER=$(cat "$DEPDIR/opac-c/build/version.txt") || exit 1
-[ "$PBFN"  = "" ] && DEFS="$DEFS -DOPAC_VERSION=\"$OPACVER\""
-[ "$PBFN" != "" ] && DEFS="$DEFS -DOPAC_VERSION=\\\"$OPACVER\\\""
+OPACVER=$(cd "$DEPDIR/opac-c/build/" && ./verget) || exit 1
+DEFS="$DEFS -DOPAC_VERSION=$OPACVER"
 builddir "$DEPDIR/opac-c/src" "$OTMPDIR"
 
 DEFS="$DEFS $OPATLS_DEFS"
