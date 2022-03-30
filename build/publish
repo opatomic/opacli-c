@@ -48,12 +48,12 @@ fi
 
 VERSION=$(./verget)
 
-if [ "v$VERSION" != "$(git describe --exact-match --tags HEAD)" ]; then
+if [ "$VERSION" != "$(git describe --exact-match --tags HEAD)" ]; then
 	echo "error: source is not clean copy of tagged version" >&2; exit 1
 fi
 
-GHTAG="v$VERSION"
-GHRELURL="https://api.github.com/repos/$GHUSER/$GHREPO/releases/tags/v$VERSION"
+GHTAG="$VERSION"
+GHRELURL="https://api.github.com/repos/$GHUSER/$GHREPO/releases/tags/$VERSION"
 GHRELID=$(curl -s -S -u "$GHUSER:$GHTOKEN" "$GHRELURL" | jq ".id")
 if [ "$GHRELID" = "null" ]; then
 	echo "creating github release $GHTAG"
