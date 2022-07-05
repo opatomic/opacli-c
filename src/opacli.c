@@ -197,8 +197,9 @@ static int opaGetLineWinConsole(HANDLE h, opabuff* b) {
 				err = OPA_ERR_INTERNAL;
 			}
 			if (!err && numRead == 0) {
-				OPALOGERR("Read 0 in ReadConsoleW()");
-				err = OPA_ERR_INTERNAL;
+				// on windows, ctrl+c or ctrl+break will hit this block of code
+				opabuffSetLen(&wbuff, opabuffGetLen(&wbuff) - sizeof(wchar_t));
+				continue;
 			}
 			if (!err && wlen > 0 && wstr[wlen - 1] == '\n') {
 				char* utf8Str = NULL;
