@@ -155,37 +155,11 @@ const opatlsLib* tlsutilsGetLib(const char* name) {
 	return lib;
 }
 
-const opatlsLib* tlsutilsGetDefaultLib(void) {
-#if defined(OPA_MBEDTLS)
-	const opatlsLib* lib = &mbedLib;
-#else
+const opatlsLib* tlsutilsGetDefaultLib(const char** libs, int numLibs) {
 	const opatlsLib* lib = NULL;
-#endif
-
-#if defined(OPA_OPENSSL)
-	// TODO: detect whether openssl is up to date
-	if (opensslLoadLib()) {
-		lib = &opensslLib;
+	for (int i = 0; i < numLibs && libs[i] != NULL && lib == NULL; ++i) {
+		lib = tlsutilsGetLib(libs[i]);
 	}
-#endif
-
-	// TODO: determine whether OS tls library is available and up to date; if not then fall back to mbed (if its available)
-#ifdef _WIN32
-	// TODO: only default to schan if windows is 10+? windows 7 support is mostly phased out
-	// TODO: if mbed is not enabled, try to detect presence of openssl and use that as fallback for older windows
-	#if defined(OPA_WINSCHAN)
-		if (winIsVerGTE(6, 1) && schanInit()) {
-			// TODO: detect whether schan is up to date
-			lib = &schanLib;
-		}
-	#endif
-#elif defined(__APPLE__)
-	#if defined(OPA_SECTRANS)
-		// TODO: detect whether sec trans is up to date
-		lib = &sectransLib;
-	#endif
-#endif
-
 	return lib;
 }
 

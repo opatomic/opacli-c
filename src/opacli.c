@@ -800,6 +800,13 @@ static int mainInternal(int argc, const char* argv[]) {
 	const char* certP12 = NULL;
 	const char* certPass = NULL;
 	int lastReqWasErr = 0;
+#ifdef _WIN32
+	static const char* DEF_TLS_LIBS[] = {"schan", "openssl", "mbed"};
+#elif defined(__APPLE__)
+	static const char* DEF_TLS_LIBS[] = {"sectrans", "openssl", "mbed"};
+#else
+	static const char* DEF_TLS_LIBS[] = {"openssl", "mbed"};
+#endif
 
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
@@ -891,7 +898,7 @@ static int mainInternal(int argc, const char* argv[]) {
 	}
 
 	if (connOpts.useTLS && tlsLib2 == NULL) {
-		tlsLib2 = tlsutilsGetDefaultLib();
+		tlsLib2 = tlsutilsGetDefaultLib(DEF_TLS_LIBS, sizeof(DEF_TLS_LIBS) / sizeof(DEF_TLS_LIBS[0]));
 		if (tlsLib2 == NULL) {
 			opa_fprintf(stderr, "cannot load default tls library\n");
 			exit(EXIT_FAILURE);

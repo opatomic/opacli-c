@@ -18,7 +18,7 @@ typedef int (*tlsutilsNextCertCB)(void* ctx, const void* buff, size_t len);
 
 int tlsutilsIterateCerts(const char* file, void* ctx, tlsutilsNextCertCB cbfunc);
 int tlsutilsLoadPsk(const char* filename, opatlsPsk** ppPsk);
-const opatlsLib* tlsutilsGetDefaultLib(void);
+const opatlsLib* tlsutilsGetDefaultLib(const char** libs, int numLibs);
 const opatlsLib* tlsutilsGetLib(const char* name);
 
 #if defined(__APPLE__) && (defined(OPA_SECTRANS) || (defined(OPA_MBEDTLS) && !defined(OPA_MBEDTLS_NO_MACOS_SYS_CERTS)))
