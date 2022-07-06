@@ -129,7 +129,7 @@ static void winLogErr(DWORD errCode) {
 	char* msgBuff = NULL;
 	DWORD res = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*) &msgBuff, 0, NULL);
 	if (res > 0 && msgBuff != NULL) {
-		if (msgBuff[res - 1] == "\n") {
+		if (msgBuff[res - 1] == '\n') {
 			fprintf(stderr, "%s", msgBuff);
 		} else {
 			fprintf(stderr, "%s\n", msgBuff);
