@@ -125,6 +125,15 @@ static int readLine(line* l) {
 }
 
 #ifdef _WIN32
+static void winLogErr(DWORD errCode) {
+	char* msgBuff = NULL;
+	DWORD res = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*) &msgBuff, 0, NULL);
+	if (res > 0 && msgBuff != NULL) {
+		fprintf(stderr, "%s\n", msgBuff);
+		LocalFree(msgBuff);
+	}
+}
+
 static wchar_t* winUtf8ToWide(const char* utf8Str) {
 	if (utf8Str == NULL) {
 		return NULL;
@@ -158,7 +167,8 @@ static void runCommand(const char* dir, char* cmd, const char* msg) {
 	}
 
 	if (!CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, 0, NULL, wdir, &si, &pi)) {
-		// TODO: log wcmd, wdir, error code, error string
+		// TODO: log wcmd, wdir
+		winLogErr(GetLastError());
 		logAndExit("CreateProcess() failed");
 	}
 
