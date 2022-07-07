@@ -36,7 +36,8 @@ OTMPDIR="tmp"
 OUTDIR="out"
 DEPDIR="dep"
 UTILDIR="util"
-PBFN="$OTMPDIR/parallel.txt"
+# disable parallel.c on msys2/windows/mingw
+[ "$OS" = "Windows_NT" ] || PBFN="$OTMPDIR/parallel.txt"
 
 OPAC_VERSION="${OPAC_VERSION:-0.1.69}"
 OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
