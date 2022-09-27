@@ -45,8 +45,9 @@ typedef ssize_t recvres;
 // this is here for compiling with MSVC and targeting older versions of windows
 #ifndef IN6ADDR_LOOPBACK_INIT
 #define IN6ADDR_LOOPBACK_INIT {{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}}}
-static const struct in6_addr in6addr_loopback = IN6ADDR_LOOPBACK_INIT;
 #endif
+
+static const struct in6_addr opa_in6addr_loopback = IN6ADDR_LOOPBACK_INIT;
 
 
 void opasockInit(opasock* s) {
@@ -107,7 +108,7 @@ int opasockIsLoopback(const opasock* s) {
 			}
 		} else if (addr.ss_family == AF_INET6) {
 			// ipv6
-			if (memcmp(&((struct sockaddr_in6*)&addr)->sin6_addr, &in6addr_loopback, sizeof(struct in6_addr)) == 0) {
+			if (memcmp(&((struct sockaddr_in6*)&addr)->sin6_addr, &opa_in6addr_loopback, sizeof(struct in6_addr)) == 0) {
 				// TODO: is this right? is loopback more than 1 address for ipv6?
 				return 1;
 			}
