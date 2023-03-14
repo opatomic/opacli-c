@@ -39,7 +39,7 @@ UTILDIR="util"
 # disable parallel.c on msys2/windows/mingw
 [ "$OS" = "Windows_NT" ] || PBFN="$OTMPDIR/parallel.txt"
 
-OPAC_VERSION="${OPAC_VERSION:-0.1.72}"
+OPAC_VERSION="${OPAC_VERSION:-0.1.73}"
 OPABIGINT_LIB="${OPABIGINT_LIB:-mbedtls}"
 MBEDTLS_DIR="$DEPDIR/mbedtls"
 MBEDTLS_BRANCH="${MBEDTLS_BRANCH:-mbedtls-2.28}"
